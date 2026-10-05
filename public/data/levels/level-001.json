@@ -1,0 +1,15 @@
+{
+    "id": "001",
+    "width": 7,
+    "height": 7,
+    "tiles": [
+        ["wall", "wall", "wall", "wall", "wall", "wall", "wall"],
+        ["wall", "road", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "wall", "wall", "wall", "wall", "wall", "wall"]
+    ],
+    "start": {"x": 1, "y": 1}
+}
