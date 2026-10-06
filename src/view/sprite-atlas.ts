@@ -29,7 +29,7 @@ function parseRect(value: unknown, name: string): { x: number; y: number; w: num
     return { x, y, w, h }
 }
 
-export function parseAtlas(data: unknown): AtlasDescription {
+function parseFramesAndMeta(data: unknown): { frames: Record<string, AtlasFrame>; meta: AtlasMeta } {
     if (!isRecord(data)) fail('атлас: данные должны быть объектом')
 
     const { frames, meta } = data
@@ -55,19 +55,39 @@ export function parseAtlas(data: unknown): AtlasDescription {
         parsed[name] = frame
     }
 
-    const wall = parsed.wall
-    if (!wall) fail('атлас: отсутствует кадр "wall" — источник размера тайла')
+    return { frames: parsed, meta: { image, size: { w: size.w, h: size.h } } }
+}
 
+function describeAtlas(frames: Record<string, AtlasFrame>, meta: AtlasMeta, tileSize: number): AtlasDescription {
     return {
-        frames: parsed,
-        meta: { image, size: { w: size.w, h: size.h } },
-        tileSize: wall.frame.w,
+        frames,
+        meta,
+        tileSize,
         getFrame(name: string): AtlasFrame {
-            const frame = parsed[name]
+            const frame = frames[name]
             if (!frame) fail(`атлас: неизвестный кадр "${name}"`)
             return frame
         },
     }
+}
+
+export function parseAtlas(data: unknown): AtlasDescription {
+    const { frames, meta } = parseFramesAndMeta(data)
+
+    const wall = frames.wall
+    if (!wall) fail('атлас: отсутствует кадр "wall" — источник размера тайла')
+
+    return describeAtlas(frames, meta, wall.frame.w)
+}
+
+export function parseAnimationAtlas(data: unknown): AtlasDescription {
+    const { frames, meta } = parseFramesAndMeta(data)
+    const names = Object.keys(frames)
+    const firstName = names[0]
+    if (firstName === undefined) fail('атлас: нет ни одного кадра анимации')
+    const first = frames[firstName]
+    if (first === undefined) fail('атлас: нет ни одного кадра анимации')
+    return describeAtlas(frames, meta, first.frame.w)
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -83,6 +103,15 @@ export async function loadAtlas(jsonUrl: string | URL): Promise<SpriteAtlas> {
     const response = await fetch(jsonUrl)
     if (!response.ok) fail(`атлас: не удалось загрузить ${jsonUrl}: HTTP ${response.status}`)
     const atlas = parseAtlas(await response.json())
+    const imageUrl = `${String(jsonUrl).replace(/[^/]*$/, '')}${atlas.meta.image}`
+    const image = await loadImage(imageUrl)
+    return { ...atlas, image }
+}
+
+export async function loadAnimationAtlas(jsonUrl: string | URL): Promise<SpriteAtlas> {
+    const response = await fetch(jsonUrl)
+    if (!response.ok) fail(`атлас: не удалось загрузить ${jsonUrl}: HTTP ${response.status}`)
+    const atlas = parseAnimationAtlas(await response.json())
     const imageUrl = `${String(jsonUrl).replace(/[^/]*$/, '')}${atlas.meta.image}`
     const image = await loadImage(imageUrl)
     return { ...atlas, image }

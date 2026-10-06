@@ -6,7 +6,8 @@ import type { SpriteAtlas } from './sprite-atlas.ts'
 
 export interface RendererOptions {
     ctx: CanvasRenderingContext2D
-    atlas: SpriteAtlas
+    tiles: SpriteAtlas
+    rabbit: SpriteAtlas
     animator: SpriteAnimator
     getLayout: () => Layout
 }
@@ -18,22 +19,22 @@ export interface Renderer {
 }
 
 export function createRenderer(options: RendererOptions): Renderer {
-    const { ctx, atlas, animator, getLayout } = options
+    const { ctx, tiles, rabbit, animator, getLayout } = options
     const layer = document.createElement('canvas')
     const layerCtx = layer.getContext('2d')
     if (!layerCtx) throw new Error('renderer: не удалось создать offscreen-слой')
 
     function drawCell(target: CanvasRenderingContext2D, x: number, y: number, type: CellType, tileSize: number): void {
-        const { x: sx, y: sy, w, h } = atlas.getFrame(type).frame
-        target.drawImage(atlas.image, sx, sy, w, h, x * tileSize, y * tileSize, tileSize, tileSize)
+        const { x: sx, y: sy, w, h } = tiles.getFrame(type).frame
+        target.drawImage(tiles.image, sx, sy, w, h, x * tileSize, y * tileSize, tileSize, tileSize)
     }
 
     function render(state: GameState): void {
         const layout = getLayout()
         ctx.drawImage(layer, layout.offsetX, layout.offsetY)
-        const { x: sx, y: sy, w, h } = atlas.getFrame(animator.current()).frame
+        const { x: sx, y: sy, w, h } = rabbit.getFrame(animator.current()).frame
         const rect = playerRect(state.player.x, state.player.y, layout)
-        ctx.drawImage(atlas.image, sx, sy, w, h, rect.x, rect.y, rect.width, rect.height)
+        ctx.drawImage(rabbit.image, sx, sy, w, h, rect.x, rect.y, rect.width, rect.height)
     }
 
     return {

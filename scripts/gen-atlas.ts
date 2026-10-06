@@ -1,4 +1,5 @@
-import { deflateSync } from 'node:zlib'
+import { mkdirSync } from 'node:fs'
+import { decodeJpg, decodePng, encodePng, type RgbaImage } from './atlas-codec.ts'
 
 interface AtlasFrame {
     frame: { x: number; y: number; w: number; h: number }
@@ -10,93 +11,171 @@ interface Atlas {
     meta: { image: string; size: { w: number; h: number } }
 }
 
-const SPRITES_DIR = new URL('../public/assets/sprites/', import.meta.url)
-const BACKGROUND: RGB = [16, 16, 16]
-const COLORS: Record<string, RGB> = {
-    wall: [74, 74, 74],
-    soil: [139, 90, 43],
-    road: [43, 43, 43],
-    rabbit: [242, 242, 242],
-}
-const UNKNOWN_FRAME: RGB = [255, 0, 255]
+const TILE = 130
+const TILE_NAMES = ['wall', 'soil', 'road'] as const
+const STRIP_FILE = 'rabbit-strip.png'
+const STRIP_W = 1170
+const STRIP_H = 130
+const RABBIT_FRAMES = 9
 
-type RGB = [number, number, number]
-
-function crc32(data: Uint8Array): number {
-    let crc = -1
-    for (const byte of data) {
-        crc ^= byte
-        for (let bit = 0; bit < 8; bit++) {
-            crc = (crc & 1) === 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1
-        }
-    }
-    return (crc ^ -1) >>> 0
+function fail(message: string): never {
+    console.error(`gen-atlas: ${message}`)
+    process.exit(1)
 }
 
-function chunk(type: string, data: Uint8Array): Uint8Array {
-    const out = new Uint8Array(12 + data.length)
-    const view = new DataView(out.buffer)
-    view.setUint32(0, data.length)
-    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i)
-    out.set(data, 8)
-    view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)))
-    return out
-}
-
-function encodePng(atlas: Atlas): Uint8Array {
-    const { w, h } = atlas.meta.size
-    const stride = 1 + w * 3
-    const [bgR, bgG, bgB] = BACKGROUND
-    const raw = new Uint8Array(h * stride)
+// Копирует прямоугольник из src в dest построчно.
+function blit(
+    src: RgbaImage,
+    sx: number,
+    sy: number,
+    w: number,
+    h: number,
+    dest: Uint8Array,
+    destW: number,
+    dx: number,
+    dy: number,
+): void {
     for (let y = 0; y < h; y++) {
-        const row = y * stride
-        raw[row] = 0
-        for (let x = 0; x < w; x++) {
-            const px = row + 1 + x * 3
-            raw[px] = bgR
-            raw[px + 1] = bgG
-            raw[px + 2] = bgB
-        }
+        const si = ((sy + y) * src.w + sx) * 4
+        const di = ((dy + y) * destW + dx) * 4
+        dest.set(src.data.subarray(si, si + w * 4), di)
     }
-    for (const [name, entry] of Object.entries(atlas.frames)) {
-        const [r, g, b] = COLORS[name.replace(/_.*$/, '')] ?? UNKNOWN_FRAME
-        const { x: fx, y: fy, w: fw, h: fh } = entry.frame
-        for (let y = fy; y < fy + fh; y++) {
-            const row = y * stride
-            for (let x = fx; x < fx + fw; x++) {
-                const px = row + 1 + x * 3
-                raw[px] = r
-                raw[px + 1] = g
-                raw[px + 2] = b
-            }
-        }
-    }
-
-    const ihdr = new Uint8Array(13)
-    const ihdrView = new DataView(ihdr.buffer)
-    ihdrView.setUint32(0, w)
-    ihdrView.setUint32(4, h)
-    ihdr[8] = 8
-    ihdr[9] = 2
-
-    const parts = [
-        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-        chunk('IHDR', ihdr),
-        chunk('IDAT', deflateSync(raw)),
-        chunk('IEND', new Uint8Array(0)),
-    ]
-    const png = new Uint8Array(parts.reduce((n, part) => n + part.length, 0))
-    let offset = 0
-    for (const part of parts) {
-        png.set(part, offset)
-        offset += part.length
-    }
-    return png
 }
 
-const jsonUrl = new URL('atlas.json', SPRITES_DIR)
-const atlas = (await Bun.file(jsonUrl).json()) as Atlas
-await Bun.write(new URL(atlas.meta.image, SPRITES_DIR), encodePng(atlas))
-console.log(
-    `${atlas.meta.image}: ${atlas.meta.size.w}x${atlas.meta.size.h}, кадров ${Object.keys(atlas.frames).length}`,
-)
+function join(dir: string, name: string): string {
+    return `${dir.replace(/\/+$/, '')}/${name}`
+}
+
+function argValue(name: string): string | undefined {
+    const index = Bun.argv.indexOf(name)
+    if (index < 0) return undefined
+    const value = Bun.argv[index + 1]
+    if (value === undefined || value.startsWith('--')) fail(`флаг ${name} требует значения`)
+    return value
+}
+
+async function loadFile(path: string): Promise<Uint8Array | undefined> {
+    const file = Bun.file(path)
+    if (!(await file.exists())) return undefined
+    return new Uint8Array(await file.arrayBuffer())
+}
+
+interface Output {
+    pngName: string
+    jsonName: string
+    png: Uint8Array
+    json: Atlas
+}
+
+function decodeInput(bytes: Uint8Array, label: string): RgbaImage {
+    try {
+        return label.endsWith('.png') ? decodePng(bytes, label) : decodeJpg(bytes, label)
+    } catch (error) {
+        fail(error instanceof Error ? error.message.replace(/^png: /, `${label}: `) : String(error))
+    }
+}
+
+const rawDir = argValue('--raw-dir') ?? new URL('../public/assets/raw/', import.meta.url).pathname
+const outDir = argValue('--out-dir') ?? new URL('../public/assets/sprites/', import.meta.url).pathname
+const frameDuration = Number(argValue('--frame-duration') ?? '120')
+if (!Number.isFinite(frameDuration) || frameDuration <= 0) fail('--frame-duration должен быть положительным числом')
+const combinedName = argValue('--combined')
+
+// --- Fail-fast: сначала всё читаем, декодируем и проверяем, писать начинаем только после.
+const tileBytes = await Promise.all(TILE_NAMES.map((name) => loadFile(join(rawDir, `${name}.jpg`))))
+const stripBytes = await loadFile(join(rawDir, STRIP_FILE))
+const haveTiles = tileBytes.some((bytes) => bytes !== undefined)
+if (!haveTiles && stripBytes === undefined)
+    fail(`в ${rawDir} нет входов: нужны wall.jpg/soil.jpg/road.jpg и/или ${STRIP_FILE}`)
+
+let tiles: RgbaImage[] | undefined
+if (haveTiles) {
+    tiles = tileBytes.map((bytes, i) => {
+        const name = TILE_NAMES[i] ?? 'tile'
+        if (bytes === undefined) fail(`нет файла ${name}.jpg — положите все три плитки или уберите лишние`)
+        const image = decodeInput(bytes, `${name}.jpg`)
+        if (image.w !== TILE || image.h !== TILE) {
+            fail(`${name}.jpg: ожидается ${TILE}x${TILE}, получено ${image.w}x${image.h}`)
+        }
+        return image
+    })
+}
+
+let strip: RgbaImage | undefined
+if (stripBytes !== undefined) {
+    const image = decodeInput(stripBytes, STRIP_FILE)
+    if (image.w !== STRIP_W || image.h !== STRIP_H) {
+        fail(`${STRIP_FILE}: ожидается ${STRIP_W}x${STRIP_H}, получено ${image.w}x${image.h}`)
+    }
+    strip = image
+}
+
+// --- Сборка выходов в памяти (ничего ещё не записано).
+const outputs: Output[] = []
+if (combinedName !== undefined) {
+    if (!combinedName.endsWith('.json')) fail('--combined ждёт имя JSON, например atlas.json')
+    if (tiles === undefined || strip === undefined) {
+        fail('--combined требует оба набора входов: три плитки и стрип')
+    }
+    const pngW = STRIP_W
+    const pngH = TILE + STRIP_H
+    const data = new Uint8Array(pngW * pngH * 4) // прозрачный фон, плитки непрозрачные (альфа 255 из JPEG)
+    tiles.forEach((tile, i) => {
+        blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, 0)
+    })
+    blit(strip, 0, 0, STRIP_W, STRIP_H, data, pngW, 0, TILE)
+    const frames: Record<string, AtlasFrame> = {}
+    TILE_NAMES.forEach((name, i) => {
+        frames[name] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE } }
+    })
+    for (let i = 0; i < RABBIT_FRAMES; i++) {
+        frames[`rabbit_${i}`] = { frame: { x: i * TILE, y: TILE, w: TILE, h: TILE }, duration: frameDuration }
+    }
+    const pngName = combinedName.replace(/\.json$/, '.png')
+    outputs.push({
+        pngName,
+        jsonName: combinedName,
+        png: encodePng(pngW, pngH, data, true),
+        json: { frames, meta: { image: pngName, size: { w: pngW, h: pngH } } },
+    })
+} else {
+    if (tiles !== undefined) {
+        const pngW = TILE * TILE_NAMES.length
+        const data = new Uint8Array(pngW * TILE * 4)
+        tiles.forEach((tile, i) => {
+            blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, 0)
+        })
+        const frames: Record<string, AtlasFrame> = {}
+        TILE_NAMES.forEach((name, i) => {
+            frames[name] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE } }
+        })
+        outputs.push({
+            pngName: 'tiles.png',
+            jsonName: 'tiles.json',
+            png: encodePng(pngW, TILE, data, false),
+            json: { frames, meta: { image: 'tiles.png', size: { w: pngW, h: TILE } } },
+        })
+    }
+    if (strip !== undefined) {
+        const frames: Record<string, AtlasFrame> = {}
+        for (let i = 0; i < RABBIT_FRAMES; i++) {
+            frames[`rabbit_${i}`] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE }, duration: frameDuration }
+        }
+        outputs.push({
+            pngName: 'rabbit.png',
+            jsonName: 'rabbit.json',
+            png: encodePng(STRIP_W, STRIP_H, strip.data, true),
+            json: { frames, meta: { image: 'rabbit.png', size: { w: STRIP_W, h: STRIP_H } } },
+        })
+    }
+}
+
+// --- Только теперь пишем: при любой ошибке выше не записан ни один файл.
+mkdirSync(outDir, { recursive: true })
+for (const out of outputs) {
+    await Bun.write(join(outDir, out.pngName), out.png)
+    await Bun.write(join(outDir, out.jsonName), `${JSON.stringify(out.json, null, 4)}\n`)
+    console.log(
+        `${out.pngName}: ${out.json.meta.size.w}x${out.json.meta.size.h}, кадров ${Object.keys(out.json.frames).length}`,
+    )
+}
