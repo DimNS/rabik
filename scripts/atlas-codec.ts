@@ -1,5 +1,5 @@
 import { deflateSync, inflateSync } from 'node:zlib'
-import { decode as decodeJpeg } from 'jpeg-js'
+import { decode as decodeJpeg, encode as encodeJpeg } from 'jpeg-js'
 
 export interface RgbaImage {
     w: number
@@ -218,6 +218,16 @@ export function decodeJpg(bytes: Uint8Array, label: string): RgbaImage {
     }
     if (decoded.data.length !== decoded.width * decoded.height * 4) fail(`${label}: битый вывод JPEG`)
     return { w: decoded.width, h: decoded.height, data: decoded.data }
+}
+
+export function encodeJpg(w: number, h: number, rgba: Uint8Array, quality = 85): Uint8Array {
+    let encoded: { data: Uint8Array }
+    try {
+        encoded = encodeJpeg({ width: w, height: h, data: rgba }, quality)
+    } catch (error) {
+        fail(`не удалось закодировать JPEG (${error instanceof Error ? error.message : String(error)})`)
+    }
+    return Uint8Array.from(encoded.data)
 }
 
 export function encodePng(w: number, h: number, rgba: Uint8Array, withAlpha: boolean): Uint8Array {

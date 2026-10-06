@@ -19,7 +19,7 @@ describe('parseAtlas', () => {
         for (const name of ['wall', 'soil', 'road']) {
             expect(atlas.getFrame(name)).toBeDefined()
         }
-        expect(atlas.meta.image).toBe('tiles.png')
+        expect(atlas.meta.image).toBe('tiles.jpg')
     })
 
     test('tileSize равен ширине кадра wall', async () => {

@@ -1,5 +1,5 @@
-import { mkdirSync } from 'node:fs'
-import { decodeJpg, decodePng, encodePng, type RgbaImage } from './atlas-codec.ts'
+import { mkdirSync, rmSync } from 'node:fs'
+import { decodeJpg, decodePng, encodeJpg, encodePng, type RgbaImage } from './atlas-codec.ts'
 
 interface AtlasFrame {
     frame: { x: number; y: number; w: number; h: number }
@@ -61,9 +61,9 @@ async function loadFile(path: string): Promise<Uint8Array | undefined> {
 }
 
 interface Output {
-    pngName: string
+    fileName: string
     jsonName: string
-    png: Uint8Array
+    bytes: Uint8Array
     json: Atlas
 }
 
@@ -79,6 +79,8 @@ const rawDir = argValue('--raw-dir') ?? new URL('../public/assets/raw/', import.
 const outDir = argValue('--out-dir') ?? new URL('../public/assets/sprites/', import.meta.url).pathname
 const frameDuration = Number(argValue('--frame-duration') ?? '120')
 if (!Number.isFinite(frameDuration) || frameDuration <= 0) fail('--frame-duration должен быть положительным числом')
+const jpgQuality = Number(argValue('--jpg-quality') ?? '85')
+if (!Number.isFinite(jpgQuality) || jpgQuality < 1 || jpgQuality > 100) fail('--jpg-quality должен быть числом 1..100')
 const combinedName = argValue('--combined')
 
 // --- Fail-fast: сначала всё читаем, декодируем и проверяем, писать начинаем только после.
@@ -133,9 +135,9 @@ if (combinedName !== undefined) {
     }
     const pngName = combinedName.replace(/\.json$/, '.png')
     outputs.push({
-        pngName,
+        fileName: pngName,
         jsonName: combinedName,
-        png: encodePng(pngW, pngH, data, true),
+        bytes: encodePng(pngW, pngH, data, true),
         json: { frames, meta: { image: pngName, size: { w: pngW, h: pngH } } },
     })
 } else {
@@ -150,10 +152,10 @@ if (combinedName !== undefined) {
             frames[name] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE } }
         })
         outputs.push({
-            pngName: 'tiles.png',
+            fileName: 'tiles.jpg',
             jsonName: 'tiles.json',
-            png: encodePng(pngW, TILE, data, false),
-            json: { frames, meta: { image: 'tiles.png', size: { w: pngW, h: TILE } } },
+            bytes: encodeJpg(pngW, TILE, data, jpgQuality),
+            json: { frames, meta: { image: 'tiles.jpg', size: { w: pngW, h: TILE } } },
         })
     }
     if (strip !== undefined) {
@@ -162,9 +164,9 @@ if (combinedName !== undefined) {
             frames[`rabbit_${i}`] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE }, duration: frameDuration }
         }
         outputs.push({
-            pngName: 'rabbit.png',
+            fileName: 'rabbit.png',
             jsonName: 'rabbit.json',
-            png: encodePng(STRIP_W, STRIP_H, strip.data, true),
+            bytes: encodePng(STRIP_W, STRIP_H, strip.data, true),
             json: { frames, meta: { image: 'rabbit.png', size: { w: STRIP_W, h: STRIP_H } } },
         })
     }
@@ -173,9 +175,12 @@ if (combinedName !== undefined) {
 // --- Только теперь пишем: при любой ошибке выше не записан ни один файл.
 mkdirSync(outDir, { recursive: true })
 for (const out of outputs) {
-    await Bun.write(join(outDir, out.pngName), out.png)
+    await Bun.write(join(outDir, out.fileName), out.bytes)
     await Bun.write(join(outDir, out.jsonName), `${JSON.stringify(out.json, null, 4)}\n`)
     console.log(
-        `${out.pngName}: ${out.json.meta.size.w}x${out.json.meta.size.h}, кадров ${Object.keys(out.json.frames).length}`,
+        `${out.fileName}: ${out.json.meta.size.w}x${out.json.meta.size.h}, кадров ${Object.keys(out.json.frames).length}`,
     )
+}
+if (outputs.some((out) => out.fileName === 'tiles.jpg')) {
+    rmSync(join(outDir, 'tiles.png'), { force: true })
 }
