@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
+import { hashLevelId, LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
 
 const REAL_LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta.url)
 const REAL_MANIFEST_URL = new URL('../../public/data/levels/index.json', import.meta.url)
@@ -105,6 +105,23 @@ describe('parseLevel', () => {
     test('отклоняет старт не на road', () => {
         expect(() => parseLevel({ ...validLevel(), start: { x: 2, y: 1 } })).toThrow(/должна иметь тип road/)
         expect(() => parseLevel({ ...validLevel(), start: { x: 0, y: 0 } })).toThrow(/должна иметь тип road/)
+    })
+
+    test('явный tileSeed принимается', () => {
+        expect(parseLevel({ ...validLevel(), tileSeed: 42 }).tileSeed).toBe(42)
+        expect(parseLevel({ ...validLevel(), tileSeed: 0 }).tileSeed).toBe(0)
+    })
+
+    test('отсутствующий tileSeed выводится как хэш id', () => {
+        expect(parseLevel(validLevel()).tileSeed).toBe(hashLevelId('t1'))
+        expect(parseLevel({ ...validLevel(), id: 'other' }).tileSeed).toBe(hashLevelId('other'))
+        expect(parseLevel(validLevel()).tileSeed).not.toBe(parseLevel({ ...validLevel(), id: 'other' }).tileSeed)
+    })
+
+    test('отклоняет нецелый, отрицательный и нечисловой tileSeed', () => {
+        expect(() => parseLevel({ ...validLevel(), tileSeed: -1 })).toThrow(/tileSeed/)
+        expect(() => parseLevel({ ...validLevel(), tileSeed: 4.5 })).toThrow(/tileSeed/)
+        expect(() => parseLevel({ ...validLevel(), tileSeed: '42' })).toThrow(/tileSeed/)
     })
 })
 

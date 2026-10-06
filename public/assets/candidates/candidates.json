@@ -1,0 +1,113 @@
+{
+    "tileSize": 130,
+    "candidates": [
+        {
+            "type": "wall",
+            "recipe": "brick",
+            "seed": 1,
+            "file": "wall/brick-1.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "brick",
+            "seed": 2,
+            "file": "wall/brick-2.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "brick",
+            "seed": 3,
+            "file": "wall/brick-3.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "grass",
+            "seed": 1,
+            "file": "wall/grass-1.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "grass",
+            "seed": 2,
+            "file": "wall/grass-2.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "grass",
+            "seed": 3,
+            "file": "wall/grass-3.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "stone",
+            "seed": 1,
+            "file": "wall/stone-1.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "stone",
+            "seed": 2,
+            "file": "wall/stone-2.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "stone",
+            "seed": 3,
+            "file": "wall/stone-3.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "water",
+            "seed": 1,
+            "file": "wall/water-1.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "water",
+            "seed": 2,
+            "file": "wall/water-2.jpg"
+        },
+        {
+            "type": "wall",
+            "recipe": "water",
+            "seed": 3,
+            "file": "wall/water-3.jpg"
+        },
+        {
+            "type": "soil",
+            "recipe": "earth",
+            "seed": 1,
+            "file": "soil/earth-1.jpg"
+        },
+        {
+            "type": "soil",
+            "recipe": "earth",
+            "seed": 2,
+            "file": "soil/earth-2.jpg"
+        },
+        {
+            "type": "soil",
+            "recipe": "earth",
+            "seed": 3,
+            "file": "soil/earth-3.jpg"
+        },
+        {
+            "type": "road",
+            "recipe": "asphalt",
+            "seed": 1,
+            "file": "road/asphalt-1.jpg"
+        },
+        {
+            "type": "road",
+            "recipe": "asphalt",
+            "seed": 2,
+            "file": "road/asphalt-2.jpg"
+        },
+        {
+            "type": "road",
+            "recipe": "asphalt",
+            "seed": 3,
+            "file": "road/asphalt-3.jpg"
+        }
+    ]
+}

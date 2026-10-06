@@ -10,6 +10,7 @@ export interface RendererOptions {
     rabbit: SpriteAtlas
     animator: SpriteAnimator
     getLayout: () => Layout
+    tileSeed: number
 }
 
 export interface Renderer {
@@ -18,14 +19,27 @@ export interface Renderer {
     render(state: GameState): void
 }
 
+export function pickVariant(x: number, y: number, seed: number, count: number): number {
+    if (!Number.isInteger(count) || count <= 0) {
+        throw new Error(`renderer: count вариантов должен быть положительным целым числом, получено ${count}`)
+    }
+    if (count === 1) return 0
+    let hash = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 974634211)) >>> 0
+    hash = (hash ^ (hash >>> 13)) >>> 0
+    return hash % count
+}
+
 export function createRenderer(options: RendererOptions): Renderer {
-    const { ctx, tiles, rabbit, animator, getLayout } = options
+    const { ctx, tiles, rabbit, animator, getLayout, tileSeed } = options
     const layer = document.createElement('canvas')
     const layerCtx = layer.getContext('2d')
     if (!layerCtx) throw new Error('renderer: не удалось создать offscreen-слой')
 
     function drawCell(target: CanvasRenderingContext2D, x: number, y: number, type: CellType, tileSize: number): void {
-        const { x: sx, y: sy, w, h } = tiles.getFrame(type).frame
+        let count = 0
+        while (tiles.frames[`${type}_${count}`] !== undefined) count++
+        const name = count === 0 ? type : `${type}_${pickVariant(x, y, tileSeed, count)}`
+        const { x: sx, y: sy, w, h } = tiles.getFrame(name).frame
         target.drawImage(tiles.image, sx, sy, w, h, x * tileSize, y * tileSize, tileSize, tileSize)
     }
 

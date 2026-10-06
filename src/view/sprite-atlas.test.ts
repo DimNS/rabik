@@ -15,9 +15,18 @@ async function realRabbit() {
 describe('parseAtlas', () => {
     test('реальные плитки: wall/soil/road, tileSize 130', async () => {
         const atlas = await realTiles()
-        expect(Object.keys(atlas.frames).sort()).toEqual(['road', 'soil', 'wall'])
-        for (const name of ['wall', 'soil', 'road']) {
+        // Мульти-вариантный атлас: набор wall_N/soil_N/road_N зависит от отбора в raw/,
+        // точный список не пиним — проверяем обязательные кадры и алиасы.
+        const names = Object.keys(atlas.frames)
+        for (const name of ['wall', 'soil', 'road', 'wall_0', 'soil_0', 'road_0']) {
+            expect(names).toContain(name)
+        }
+        for (const name of ['wall', 'soil', 'road', 'wall_0', 'soil_0', 'road_0']) {
             expect(atlas.getFrame(name)).toBeDefined()
+        }
+        // Алиасы указывают на нулевой вариант.
+        for (const name of ['wall', 'soil', 'road']) {
+            expect(atlas.getFrame(name)).toEqual(atlas.getFrame(`${name}_0`))
         }
         expect(atlas.meta.image).toBe('tiles.jpg')
     })

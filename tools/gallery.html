@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Галерея тайлов — отбор вариантов</title>
+<style>
+body { font-family: system-ui, sans-serif; background: #141414; color: #eee; margin: 0; padding: 16px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.tabs button { padding: 8px 16px; cursor: pointer; background: #222; color: #eee; border: 1px solid #444; border-radius: 6px; }
+.tabs button[aria-selected="true"] { background: #eee; color: #111; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #bbb; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 8px; text-align: center; }
+.card img, .card canvas { width: 130px; height: 130px; image-rendering: pixelated; background: #000; }
+.card figcaption { font-size: 12px; color: #ccc; margin-top: 6px; word-break: break-all; }
+.select-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.select-bar button { padding: 6px 12px; cursor: pointer; background: #222; color: #eee; border: 1px solid #444; border-radius: 6px; }
+.card.selected { border-color: #7c7; }
+.sel { display: block; font-size: 13px; margin-top: 6px; cursor: pointer; }
+.sel input { accent-color: #7c7; width: 16px; height: 16px; }
+.hint { font-size: 13px; color: #999; margin: 8px 0; }
+.error { color: #ff9a9a; font-size: 13px; }
+code { color: #9ad; }
+</style>
+</head>
+<body>
+<h1>Галерея тайлов</h1>
+<div class="tabs" role="tablist">
+<button id="tab-candidates" aria-selected="true">Кандидаты</button>
+<button id="tab-atlas" aria-selected="false">Запечённый атлас</button>
+</div>
+<div class="controls">
+<label>candidates.json <input type="file" id="candidatesFile" accept=".json,application/json" /></label>
+<label>tiles.json <input type="file" id="atlasFile" accept=".json,application/json" /></label>
+<span class="hint">По умолчанию грузится через fetch из <code>../public/assets/…</code> (открыть через <code>bunx serve .</code> из корня). Можно перетащить JSON-файл на страницу или выбрать вручную — так галерея работает и скопированная куда угодно.</span>
+</div>
+<p class="hint" id="status"></p>
+<section id="view-candidates">
+<div class="select-bar">
+<span id="selCount">Выбрано: 0</span>
+<button id="copyBtn">Скопировать выбранные</button>
+<button id="clearBtn">Снять выбор</button>
+<span class="hint">Цели нумеруются с 0. Если в raw/ уже есть файлы — при копировании сдвину на первый свободный индекс, просто вставьте список мне.</span>
+</div>
+<div class="grid" id="candidatesGrid"></div></section>
+<section id="view-atlas" hidden><div class="grid" id="atlasGrid"></div></section>
+<script type="module">
+const CANDIDATES_URL = '../public/assets/candidates/candidates.json';
+const ATLAS_URL = '../public/assets/sprites/tiles.json';
+const status = document.getElementById('status');
+const candidatesGrid = document.getElementById('candidatesGrid');
+const atlasGrid = document.getElementById('atlasGrid');
+
+function say(t) { status.textContent = t; }
+function dirOf(url) { const i = url.lastIndexOf('/'); return i < 0 ? '' : url.slice(0, i + 1); }
+function el(tag, text) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; }
+
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ': HTTP ' + r.status);
+  return r.json();
+}
+
+function renderCandidates(data, base) {
+  candidatesGrid.textContent = '';
+  const list = data.candidates ?? [];
+  if (!list.length) { candidatesGrid.append(el('p', 'Кандидатов нет')); return; }
+  for (const c of list) {
+    const fig = el('figure'); fig.className = 'card';
+    const img = el('img');
+    img.src = base + c.file;
+    img.alt = c.type + '/' + c.recipe + '/' + c.seed;
+    img.loading = 'lazy';
+    const cap = el('figcaption', c.type + ' / ' + c.recipe + ' / seed ' + c.seed + '\n' + c.file);
+    const sel = document.createElement('label');
+    sel.className = 'sel';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.type = c.type;
+    box.dataset.file = c.file;
+    box.addEventListener('change', () => { fig.classList.toggle('selected', box.checked); updateCount(); });
+    sel.append(box, document.createTextNode(' выбрать'));
+    fig.append(img, cap, sel);
+    fig.addEventListener('click', (e) => {
+      if (sel.contains(e.target)) return; // клик по чекбоксу/лейблу — нативно
+      box.checked = !box.checked;
+      box.dispatchEvent(new Event('change'));
+    });
+    candidatesGrid.append(fig);
+  }
+}
+
+async function renderAtlas(data, base) {
+  atlasGrid.textContent = '';
+  const frames = data.frames ?? {};
+  const names = Object.keys(frames).filter((n) => /^(wall|soil|road)_\d+$/.test(n)).sort();
+  if (!names.length) { atlasGrid.append(el('p', 'Вариантов wall_*/soil_*/road_* нет')); return; }
+  const imageUrl = base + (data.meta?.image ?? 'tiles.jpg');
+  const sheet = new Image();
+  sheet.src = imageUrl;
+  try { await sheet.decode(); } catch { await new Promise((res, rej) => { sheet.onload = res; sheet.onerror = rej; }); }
+  for (const name of names) {
+    const f = frames[name].frame;
+    const fig = el('figure'); fig.className = 'card';
+    const cv = document.createElement('canvas');
+    cv.width = f.w; cv.height = f.h;
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sheet, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    fig.append(cv, el('figcaption', name + ' (' + f.x + ',' + f.y + ')'));
+    atlasGrid.append(fig);
+  }
+}
+
+async function loadFromInputs(candidatesData, atlasData) {
+  try {
+    const cBase = dirOf(CANDIDATES_URL);
+    const aBase = dirOf(ATLAS_URL);
+    if (candidatesData) renderCandidates(candidatesData, cBase);
+    if (atlasData) await renderAtlas(atlasData, aBase);
+  } catch (e) { say('Ошибка: ' + e.message); }
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => { try { resolve(JSON.parse(r.result)); } catch (e) { reject(e); } };
+    r.onerror = reject;
+    r.readAsText(file);
+  });
+}
+
+const copyBtn = document.getElementById('copyBtn');
+const clearBtn = document.getElementById('clearBtn');
+const countSpan = document.getElementById('selCount');
+
+function selected() { return [...candidatesGrid.querySelectorAll('input[type=checkbox]:checked')]; }
+function updateCount() { countSpan.textContent = 'Выбрано: ' + selected().length; }
+
+// ponytail: нумерация целей с 0; коллизии с занятыми в raw/ разруливает агент копированием в первый свободный индекс
+function buildCopyLines(items) {
+  const next = { wall: 0, soil: 0, road: 0 };
+  return items.map((box) => {
+    const type = box.dataset.type, file = box.dataset.file;
+    const k = next[type] ?? 1;
+    next[type] = k + 1;
+    return 'cp public/assets/candidates/' + file + ' public/assets/raw/' + type + '/' + k + '.jpg';
+  });
+}
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.append(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    ta.remove(); return ok;
+  }
+}
+
+copyBtn.onclick = async () => {
+  const items = selected();
+  if (!items.length) { say('Ничего не выбрано — отметьте кандидатов чекбоксами.'); return; }
+  const text = buildCopyLines(items).join('\n');
+  if (await copyText(text)) say('Скопировано строк: ' + items.length + '. Вставьте список мне — скопирую в raw и пересоберу атлас.');
+  else say('Буфер недоступен, скопируйте вручную:\n' + text);
+};
+clearBtn.onclick = () => {
+  for (const box of selected()) { box.checked = false; box.dispatchEvent(new Event('change')); }
+};
+
+async function boot() {
+  let c = null, a = null;
+  try { c = await fetchJson(CANDIDATES_URL); renderCandidates(c, dirOf(CANDIDATES_URL)); }
+  catch (e) { candidatesGrid.append(el('p', 'Не загрузился candidates.json: ' + e.message + ' — выберите файл вручную.')); }
+  try { a = await fetchJson(ATLAS_URL); await renderAtlas(a, dirOf(ATLAS_URL)); }
+  catch (e) { atlasGrid.append(el('p', 'Не загрузился tiles.json: ' + e.message + ' — выберите файл вручную.')); }
+  say(c || a ? 'Готово. Откройте обе вкладки для проверки.' : 'Манифесты не загрузились — откройте через `bunx serve .` из корня репо.');
+  window.__gallery = { candidates: c, atlas: a };
+  return { c, a };
+}
+
+const state = await boot();
+
+document.getElementById('candidatesFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  renderCandidates(await readFile(f), dirOf(CANDIDATES_URL));
+  say('candidates.json загружен из файла: ' + f.name);
+});
+document.getElementById('atlasFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  await renderAtlas(await readFile(f), dirOf(ATLAS_URL));
+  say('tiles.json загружен из файла: ' + f.name);
+});
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0]; if (!f || !/\.json$/i.test(f.name)) return;
+  try {
+    const data = await readFile(f);
+    if (Array.isArray(data.candidates)) { renderCandidates(data, dirOf(CANDIDATES_URL)); say('Кандидаты из файла: ' + f.name); }
+    else if (data.frames) { await renderAtlas(data, dirOf(ATLAS_URL)); say('Атлас из файла: ' + f.name); }
+    else say('Неизвестный JSON: ' + f.name);
+  } catch (err) { say('Ошибка чтения ' + f.name + ': ' + err.message); }
+});
+
+const tabC = document.getElementById('tab-candidates');
+const tabA = document.getElementById('tab-atlas');
+function select(which) {
+  const isC = which === 'c';
+  tabC.setAttribute('aria-selected', isC);
+  tabA.setAttribute('aria-selected', !isC);
+  document.getElementById('view-candidates').hidden = !isC;
+  document.getElementById('view-atlas').hidden = isC;
+}
+tabC.onclick = () => select('c');
+tabA.onclick = () => select('a');
+</script>
+</body>
+</html>

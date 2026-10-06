@@ -13,6 +13,7 @@ export interface LevelData {
     height: number
     tiles: CellType[][]
     start: Vec2
+    tileSeed?: number
 }
 
 export interface LevelManifestItem {

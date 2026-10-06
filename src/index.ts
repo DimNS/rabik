@@ -1,6 +1,6 @@
 import { type Dir, tryMove } from './core/game-rules.ts'
 import { createGameState } from './core/game-state.ts'
-import { loadLevel, loadManifest } from './data/levels-loader.ts'
+import { hashLevelId, loadLevel, loadManifest } from './data/levels-loader.ts'
 import { attachKeyboard } from './input/keyboard.ts'
 import { attachPointer } from './input/pointer.ts'
 import { createGameLoop } from './loop/game-loop.ts'
@@ -55,7 +55,14 @@ async function bootstrap(): Promise<void> {
     )
 
     let layout: Layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
-    const renderer = createRenderer({ ctx: game.ctx, tiles, rabbit, animator, getLayout: () => layout })
+    const renderer = createRenderer({
+        ctx: game.ctx,
+        tiles,
+        rabbit,
+        animator,
+        getLayout: () => layout,
+        tileSeed: level.tileSeed ?? hashLevelId(level.id),
+    })
 
     const queue: Dir[] = []
     attachKeyboard(queue)

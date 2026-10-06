@@ -20,10 +20,19 @@ function isCellType(value: unknown): value is CellType {
     return CELL_TYPES.some((type) => type === value)
 }
 
+export function hashLevelId(id: string): number {
+    let hash = 0x811c9dc5
+    for (let i = 0; i < id.length; i++) {
+        hash ^= id.charCodeAt(i)
+        hash = Math.imul(hash, 0x01000193)
+    }
+    return hash >>> 0
+}
+
 export function parseLevel(data: unknown): LevelData {
     if (!isRecord(data)) fail('уровень: данные должны быть объектом')
 
-    const { id, width, height, tiles, start } = data
+    const { id, width, height, tiles, start, tileSeed } = data
     if (typeof id !== 'string' || id === '') fail('уровень: id должен быть непустой строкой')
     if (typeof width !== 'number' || !Number.isInteger(width) || width <= 0) {
         fail(`уровень "${id}": width должен быть положительным целым числом`)
@@ -63,7 +72,17 @@ export function parseLevel(data: unknown): LevelData {
         fail(`уровень "${id}": стартовая клетка (${x}, ${y}) должна иметь тип road`)
     }
 
-    return { id, width, height, tiles: grid, start: { x, y } }
+    let seed: number
+    if (tileSeed === undefined) {
+        seed = hashLevelId(id)
+    } else {
+        if (typeof tileSeed !== 'number' || !Number.isInteger(tileSeed) || tileSeed < 0) {
+            fail(`уровень "${id}": tileSeed должен быть целым неотрицательным числом`)
+        }
+        seed = tileSeed
+    }
+
+    return { id, width, height, tiles: grid, start: { x, y }, tileSeed: seed }
 }
 
 export function parseManifest(data: unknown): LevelManifest {

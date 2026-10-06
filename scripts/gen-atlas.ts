@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { decodeJpg, decodePng, encodeJpg, encodePng, type RgbaImage } from './atlas-codec.ts'
 
 interface AtlasFrame {
@@ -84,22 +84,46 @@ if (!Number.isFinite(jpgQuality) || jpgQuality < 1 || jpgQuality > 100) fail('--
 const combinedName = argValue('--combined')
 
 // --- Fail-fast: сначала всё читаем, декодируем и проверяем, писать начинаем только после.
-const tileBytes = await Promise.all(TILE_NAMES.map((name) => loadFile(join(rawDir, `${name}.jpg`))))
-const stripBytes = await loadFile(join(rawDir, STRIP_FILE))
-const haveTiles = tileBytes.some((bytes) => bytes !== undefined)
-if (!haveTiles && stripBytes === undefined)
-    fail(`в ${rawDir} нет входов: нужны wall.jpg/soil.jpg/road.jpg и/или ${STRIP_FILE}`)
+// Входы плиток — папки вариантов: raw/wall/*.jpg, raw/soil/*.jpg, raw/road/*.jpg.
+// Только `.jpg`, сортировка по имени; посторонние файлы игнорируются.
+function listVariantNames(dir: string): string[] {
+    let entries: string[]
+    try {
+        entries = readdirSync(dir)
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return []
+        fail(`не удалось прочитать ${dir}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    return entries.filter((name) => name.endsWith('.jpg')).sort()
+}
 
-let tiles: RgbaImage[] | undefined
+const variantNames = TILE_NAMES.map((name) => listVariantNames(join(rawDir, name)))
+const variantBytes = await Promise.all(
+    variantNames.map((names, t) => {
+        const typeDir = join(rawDir, TILE_NAMES[t] ?? '')
+        return Promise.all(names.map((name) => loadFile(join(typeDir, name))))
+    }),
+)
+const stripBytes = await loadFile(join(rawDir, STRIP_FILE))
+const variantCount = variantNames.reduce((n, names) => n + names.length, 0)
+const haveTiles = variantCount > 0
+if (!haveTiles && stripBytes === undefined)
+    fail(`в ${rawDir} нет входов: нужны варианты wall/*.jpg, soil/*.jpg, road/*.jpg и/или ${STRIP_FILE}`)
+
+let variants: RgbaImage[][] | undefined
 if (haveTiles) {
-    tiles = tileBytes.map((bytes, i) => {
-        const name = TILE_NAMES[i] ?? 'tile'
-        if (bytes === undefined) fail(`нет файла ${name}.jpg — положите все три плитки или уберите лишние`)
-        const image = decodeInput(bytes, `${name}.jpg`)
-        if (image.w !== TILE || image.h !== TILE) {
-            fail(`${name}.jpg: ожидается ${TILE}x${TILE}, получено ${image.w}x${image.h}`)
-        }
-        return image
+    variants = variantBytes.map((files, t) => {
+        const type = TILE_NAMES[t] ?? 'tile'
+        const names = variantNames[t] ?? []
+        return (files ?? []).map((bytes, i) => {
+            const name = names[i] ?? `${i}.jpg`
+            if (bytes === undefined) fail(`${type}/${name}: не удалось прочитать файл`)
+            const image = decodeInput(bytes, `${type}/${name}`)
+            if (image.w !== TILE || image.h !== TILE) {
+                fail(`${type}/${name}: ожидается ${TILE}x${TILE}, получено ${image.w}x${image.h}`)
+            }
+            return image
+        })
     })
 }
 
@@ -116,13 +140,18 @@ if (stripBytes !== undefined) {
 const outputs: Output[] = []
 if (combinedName !== undefined) {
     if (!combinedName.endsWith('.json')) fail('--combined ждёт имя JSON, например atlas.json')
-    if (tiles === undefined || strip === undefined) {
-        fail('--combined требует оба набора входов: три плитки и стрип')
+    if (variants === undefined || strip === undefined) {
+        fail('--combined требует оба набора входов: хотя бы один вариант каждого типа и стрип')
     }
+    const first = TILE_NAMES.map((name, t) => {
+        const tile = variants[t]?.[0]
+        if (!tile) fail(`--combined: нет вариантов типа ${name} — нужен хотя бы один`)
+        return tile
+    })
     const pngW = STRIP_W
     const pngH = TILE + STRIP_H
     const data = new Uint8Array(pngW * pngH * 4) // прозрачный фон, плитки непрозрачные (альфа 255 из JPEG)
-    tiles.forEach((tile, i) => {
+    first.forEach((tile, i) => {
         blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, 0)
     })
     blit(strip, 0, 0, STRIP_W, STRIP_H, data, pngW, 0, TILE)
@@ -141,21 +170,27 @@ if (combinedName !== undefined) {
         json: { frames, meta: { image: pngName, size: { w: pngW, h: pngH } } },
     })
 } else {
-    if (tiles !== undefined) {
-        const pngW = TILE * TILE_NAMES.length
-        const data = new Uint8Array(pngW * TILE * 4)
-        tiles.forEach((tile, i) => {
-            blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, 0)
-        })
+    if (variants !== undefined) {
+        // Три ряда (ряд на тип), ширина по максимуму вариантов.
+        const maxCount = Math.max(...variants.map((list) => list.length))
+        const pngW = maxCount * TILE
+        const pngH = TILE * TILE_NAMES.length
+        const data = new Uint8Array(pngW * pngH * 4)
         const frames: Record<string, AtlasFrame> = {}
-        TILE_NAMES.forEach((name, i) => {
-            frames[name] = { frame: { x: i * TILE, y: 0, w: TILE, h: TILE } }
+        TILE_NAMES.forEach((name, t) => {
+            const list = variants[t] ?? []
+            list.forEach((tile, i) => {
+                const frameName = `${name}_${i}`
+                frames[frameName] = { frame: { x: i * TILE, y: t * TILE, w: TILE, h: TILE } }
+                if (i === 0) frames[name] = { frame: { x: 0, y: t * TILE, w: TILE, h: TILE } }
+                blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, t * TILE)
+            })
         })
         outputs.push({
             fileName: 'tiles.jpg',
             jsonName: 'tiles.json',
-            bytes: encodeJpg(pngW, TILE, data, jpgQuality),
-            json: { frames, meta: { image: 'tiles.jpg', size: { w: pngW, h: TILE } } },
+            bytes: encodeJpg(pngW, pngH, data, jpgQuality),
+            json: { frames, meta: { image: 'tiles.jpg', size: { w: pngW, h: pngH } } },
         })
     }
     if (strip !== undefined) {
