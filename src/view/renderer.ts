@@ -1,7 +1,7 @@
 import type { Dir } from '../core/game-rules.ts'
 import type { GameState } from '../core/game-state.ts'
 import type { CellType } from '../core/level-types.ts'
-import { type Layout, MAX_TILE_SIZE, playerRect } from './layout.ts'
+import { type Layout, playerRect } from './layout.ts'
 import type { SpriteAnimator } from './sprite-anim.ts'
 import type { SpriteAtlas } from './sprite-atlas.ts'
 
@@ -34,17 +34,6 @@ export function pickVariant(x: number, y: number, seed: number, count: number): 
 // ponytail: блок фиксирован 2×2, вынести в константу WALL_BLOCK=2 если карты станут больше.
 export function pickWallVariant(x: number, y: number, seed: number, count: number): number {
     return pickVariant(Math.floor(x / 2), Math.floor(y / 2), seed, count)
-}
-
-// 4-битная маска соседей-wall: 1 = север, 2 = восток, 4 = юг, 8 = запад.
-// Край карты и soil/road считаются внешней границей (бит сброшен).
-export function wallNeighborMask(grid: CellType[][], x: number, y: number): number {
-    let mask = 0
-    if (grid[y - 1]?.[x] === 'wall') mask |= 1
-    if (grid[y]?.[x + 1] === 'wall') mask |= 2
-    if (grid[y + 1]?.[x] === 'wall') mask |= 4
-    if (grid[y]?.[x - 1] === 'wall') mask |= 8
-    return mask
 }
 
 // Имя кадра клетки с учётом кластеризации стен. count=0 — базовое имя типа.
@@ -82,42 +71,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         road: countFrames('road'),
     }
 
-    // Базовый тайл плюс кромка для стен.
-    function drawCell(
-        target: CanvasRenderingContext2D,
-        x: number,
-        y: number,
-        type: CellType,
-        tileSize: number,
-        grid: CellType[][],
-    ): void {
+    // Базовый тайл.
+    function drawCell(target: CanvasRenderingContext2D, x: number, y: number, type: CellType, tileSize: number): void {
         const name = variantFrame(type, x, y, tileSeed, frameCounts[type])
         const { x: sx, y: sy, w, h } = tiles.getFrame(name).frame
         target.drawImage(tiles.image, sx, sy, w, h, x * tileSize, y * tileSize, tileSize, tileSize)
-        if (type !== 'wall') return
-        drawWallEdge(target, x, y, tileSize, grid)
-    }
-
-    // Тёмная кромка по внешним границам массива стен.
-    function drawWallEdge(
-        target: CanvasRenderingContext2D,
-        x: number,
-        y: number,
-        tileSize: number,
-        grid: CellType[][],
-    ): void {
-        const mask = wallNeighborMask(grid, x, y)
-        if (mask === 15) return
-        const edge = Math.max(2, Math.round((tileSize * 7) / MAX_TILE_SIZE))
-        const px = x * tileSize
-        const py = y * tileSize
-        const prev = target.fillStyle
-        target.fillStyle = 'rgba(0, 0, 0, 0.35)'
-        if ((mask & 1) === 0) target.fillRect(px, py, tileSize, edge)
-        if ((mask & 2) === 0) target.fillRect(px + tileSize - edge, py, edge, tileSize)
-        if ((mask & 4) === 0) target.fillRect(px, py + tileSize - edge, tileSize, edge)
-        if ((mask & 8) === 0) target.fillRect(px, py, edge, tileSize)
-        target.fillStyle = prev
     }
 
     function render(state: GameState): void {
@@ -146,7 +104,7 @@ export function createRenderer(options: RendererOptions): Renderer {
             for (let y = 0; y < state.height; y++) {
                 for (let x = 0; x < state.width; x++) {
                     const type = state.grid[y]?.[x]
-                    if (type) drawCell(layerCtx, x, y, type, layout.tileSize, state.grid)
+                    if (type) drawCell(layerCtx, x, y, type, layout.tileSize)
                 }
             }
             render(state)
@@ -157,7 +115,7 @@ export function createRenderer(options: RendererOptions): Renderer {
             if (!type) return
             const tileSize = layout.tileSize
             layerCtx.clearRect(x * tileSize, y * tileSize, tileSize, tileSize)
-            drawCell(layerCtx, x, y, type, tileSize, state.grid)
+            drawCell(layerCtx, x, y, type, tileSize)
             render(state)
         },
         render,

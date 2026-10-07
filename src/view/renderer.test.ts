@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CellType } from '../core/level-types.ts'
-import { facingAngle, pickVariant, pickWallVariant, variantFrame, wallNeighborMask } from './renderer.ts'
+import { facingAngle, pickVariant, pickWallVariant, variantFrame } from './renderer.ts'
 
 describe('pickVariant', () => {
     test('детерминирован: те же аргументы — тот же вариант', () => {
@@ -130,69 +129,5 @@ describe('variantFrame', () => {
             expect(variantFrame('road', x, y, seed, count)).toBe(`road_${pickVariant(x, y, seed, count)}`)
             expect(variantFrame('wall', x, y, seed, count)).toBe(`wall_${pickWallVariant(x, y, seed, count)}`)
         }
-    })
-})
-
-describe('wallNeighborMask', () => {
-    const W: CellType = 'wall'
-    const S: CellType = 'soil'
-
-    test('центр массива 3×3 — все биты, одиночка — ноль', () => {
-        const full = [
-            [W, W, W],
-            [W, W, W],
-            [W, W, W],
-        ]
-        expect(wallNeighborMask(full, 1, 1)).toBe(15)
-        expect(wallNeighborMask([[W]], 0, 0)).toBe(0)
-    })
-
-    test('угол карты: только внутренние соседи', () => {
-        const grid = [
-            [W, W],
-            [W, W],
-        ]
-        expect(wallNeighborMask(grid, 0, 0)).toBe(2 | 4)
-    })
-
-    test('сосед soil/road считается внешней границей', () => {
-        const grid = [
-            [W, S, W],
-            [S, W, S],
-            [W, S, W],
-        ]
-        expect(wallNeighborMask(grid, 1, 1)).toBe(0)
-    })
-})
-
-describe('wall rendering consistency', () => {
-    const W: CellType = 'wall'
-    const S: CellType = 'soil'
-
-    test('вариант и стыки — чистая функция (x, y, seed, grid): повтор совпадает', () => {
-        const grid = [
-            [W, W, S],
-            [W, W, W],
-            [S, W, W],
-        ]
-        for (const [x, y] of [
-            [0, 0],
-            [1, 1],
-            [2, 1],
-        ] as const) {
-            expect(pickWallVariant(x, y, 42, 4)).toBe(pickWallVariant(x, y, 42, 4))
-            expect(wallNeighborMask(grid, x, y)).toBe(wallNeighborMask(grid, x, y))
-        }
-    })
-
-    test('дальняя клетка не влияет на локальные вариант и стыки (O(1))', () => {
-        const grid: CellType[][] = [
-            [W, W, S, W],
-            [W, W, S, W],
-            [S, S, S, S],
-        ]
-        const before = [pickWallVariant(0, 0, 7, 4), wallNeighborMask(grid, 0, 0)]
-        grid[0] = [W, W, S, S]
-        expect([pickWallVariant(0, 0, 7, 4), wallNeighborMask(grid, 0, 0)]).toEqual(before)
     })
 })
