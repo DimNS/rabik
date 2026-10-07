@@ -1,3 +1,4 @@
+import type { Dir } from '../core/game-rules.ts'
 import type { GameState } from '../core/game-state.ts'
 import type { CellType } from '../core/level-types.ts'
 import { type Layout, playerRect } from './layout.ts'
@@ -10,6 +11,7 @@ export interface RendererOptions {
     rabbit: SpriteAtlas
     animator: SpriteAnimator
     getLayout: () => Layout
+    getFacing: () => Dir
     tileSeed: number
 }
 
@@ -29,8 +31,19 @@ export function pickVariant(x: number, y: number, seed: number, count: number): 
     return hash % count
 }
 
+export const FACING_ANGLE: Record<Dir, number> = {
+    up: 0,
+    right: Math.PI / 2,
+    down: Math.PI,
+    left: -Math.PI / 2,
+}
+
+export function facingAngle(dir: Dir): number {
+    return FACING_ANGLE[dir] ?? 0
+}
+
 export function createRenderer(options: RendererOptions): Renderer {
-    const { ctx, tiles, rabbit, animator, getLayout, tileSeed } = options
+    const { ctx, tiles, rabbit, animator, getLayout, getFacing, tileSeed } = options
     const layer = document.createElement('canvas')
     const layerCtx = layer.getContext('2d')
     if (!layerCtx) throw new Error('renderer: не удалось создать offscreen-слой')
@@ -48,7 +61,16 @@ export function createRenderer(options: RendererOptions): Renderer {
         ctx.drawImage(layer, layout.offsetX, layout.offsetY)
         const { x: sx, y: sy, w, h } = rabbit.getFrame(animator.current()).frame
         const rect = playerRect(state.player.x, state.player.y, layout)
-        ctx.drawImage(rabbit.image, sx, sy, w, h, rect.x, rect.y, rect.width, rect.height)
+        const angle = facingAngle(getFacing())
+        if (angle === 0) {
+            ctx.drawImage(rabbit.image, sx, sy, w, h, rect.x, rect.y, rect.width, rect.height)
+            return
+        }
+        ctx.save()
+        ctx.translate(rect.x + rect.width / 2, rect.y + rect.height / 2)
+        ctx.rotate(angle)
+        ctx.drawImage(rabbit.image, sx, sy, w, h, -rect.width / 2, -rect.height / 2, rect.width, rect.height)
+        ctx.restore()
     }
 
     return {

@@ -13,6 +13,22 @@ describe('computeLayout', () => {
         expect(computeLayout(9, 40, 10, 10, 1).tileSize).toBe(1)
     })
 
+    test('максимальный размер тайла — 130', () => {
+        expect(computeLayout(2000, 2000, 4, 4, 1).tileSize).toBe(130)
+        expect(computeLayout(520, 130, 4, 1, 1).tileSize).toBe(130)
+    })
+
+    test('при cap поле центрируется с полями, а не растягивается', () => {
+        const layout = computeLayout(2000, 2000, 4, 4, 1)
+        expect(layout.tileSize).toBe(130)
+        expect(layout.offsetX).toBe(740)
+        expect(layout.offsetY).toBe(740)
+    })
+
+    test('маленькое окно сжимает тайл как раньше', () => {
+        expect(computeLayout(100, 100, 4, 4, 1).tileSize).toBe(25)
+    })
+
     test('смещение центрирования целочисленное и центрирует сетку', () => {
         const layout = computeLayout(105, 60, 4, 3, 1)
         expect(layout.offsetX).toBe(12)

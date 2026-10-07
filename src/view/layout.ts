@@ -16,9 +16,12 @@ export function readDpr(): number {
     return globalThis.devicePixelRatio || 1
 }
 
+// Исходный размер спрайта: растягивать сильнее нет смысла, только мыло.
+export const MAX_TILE_SIZE = 130
+
 export function computeLayout(cssW: number, cssH: number, gridW: number, gridH: number, dpr?: number): Layout {
     const ratio = dpr ?? readDpr()
-    const tileSize = Math.max(1, Math.floor(Math.min(cssW / gridW, cssH / gridH)))
+    const tileSize = Math.min(MAX_TILE_SIZE, Math.max(1, Math.floor(Math.min(cssW / gridW, cssH / gridH))))
     return {
         tileSize,
         offsetX: Math.floor((cssW - tileSize * gridW) / 2),

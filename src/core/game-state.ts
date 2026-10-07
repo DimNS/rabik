@@ -8,6 +8,7 @@ export interface GameState {
     player: Vec2
     soilCount: number
     solved: boolean
+    stuck: boolean
 }
 
 export function createEmptyState(): GameState {
@@ -18,6 +19,7 @@ export function createEmptyState(): GameState {
         player: { x: 0, y: 0 },
         soilCount: 0,
         solved: false,
+        stuck: false,
     }
 }
 
@@ -29,5 +31,6 @@ export function createGameState(level: LevelData): GameState {
         player: { ...level.start },
         soilCount: countSoil(level.tiles),
         solved: false,
+        stuck: false,
     }
 }

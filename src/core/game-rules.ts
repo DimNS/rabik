@@ -19,6 +19,12 @@ export function canMove(state: GameState, dir: Dir): Vec2 | null {
     return state.grid[y]?.[x] === 'soil' ? { x, y } : null
 }
 
+const DIRS: Dir[] = ['up', 'down', 'left', 'right']
+
+export function isStuck(state: GameState): boolean {
+    return DIRS.every((dir) => canMove(state, dir) === null)
+}
+
 export function tryMove(state: GameState, dir: Dir): boolean {
     const next = canMove(state, dir)
     if (!next) return false
@@ -28,5 +34,6 @@ export function tryMove(state: GameState, dir: Dir): boolean {
     state.player = next
     state.soilCount--
     if (state.soilCount === 0) state.solved = true
+    else state.stuck = isStuck(state)
     return true
 }

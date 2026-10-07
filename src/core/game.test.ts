@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { canMove, type Dir, tryMove } from './game-rules.ts'
+import { canMove, type Dir, isStuck, tryMove } from './game-rules.ts'
 import { createEmptyState, createGameState, type GameState } from './game-state.ts'
 import type { CellType, LevelData, Vec2 } from './level-types.ts'
 
@@ -66,6 +66,7 @@ describe('game-state', () => {
             player: { x: 0, y: 0 },
             soilCount: 0,
             solved: false,
+            stuck: false,
         })
     })
 
@@ -131,6 +132,60 @@ describe('tryMove', () => {
         expect(cellAt(state.grid, start)).toBe('road')
         expect(tryMove(state, 'left')).toBe(false)
         expect(state.player).not.toEqual(start)
+    })
+})
+
+describe('тупик (game over)', () => {
+    function makeState(grid: CellType[][], player: Vec2): GameState {
+        return {
+            grid: grid.map((row) => [...row]),
+            width: grid[0]?.length ?? 0,
+            height: grid.length,
+            player: { ...player },
+            soilCount: grid.flat().filter((cell) => cell === 'soil').length,
+            solved: false,
+            stuck: false,
+        }
+    }
+
+    test('шаг в клетку без соседней soil при оставшейся soil — тупик', () => {
+        const state = makeState(
+            [
+                ['road', 'soil', 'wall'],
+                ['soil', 'wall', 'wall'],
+            ],
+            { x: 0, y: 0 },
+        )
+        expect(tryMove(state, 'right')).toBe(true)
+        expect(state.solved).toBe(false)
+        expect(state.stuck).toBe(true)
+        expect(isStuck(state)).toBe(true)
+    })
+
+    test('последний ход даёт победу, а не тупик', () => {
+        const state = makeState([['road', 'soil']], { x: 0, y: 0 })
+        expect(tryMove(state, 'right')).toBe(true)
+        expect(state.solved).toBe(true)
+        expect(state.stuck).toBe(false)
+    })
+
+    test('есть соседняя soil — тупика нет', () => {
+        const state = makeState([['road', 'soil', 'soil']], { x: 0, y: 0 })
+        expect(tryMove(state, 'right')).toBe(true)
+        expect(state.solved).toBe(false)
+        expect(state.stuck).toBe(false)
+    })
+
+    test('неуспешный ход флаг тупика не выставляет', () => {
+        const state = makeState(
+            [
+                ['road', 'wall'],
+                ['soil', 'wall'],
+            ],
+            { x: 0, y: 0 },
+        )
+        expect(tryMove(state, 'right')).toBe(false)
+        expect(state.stuck).toBe(false)
     })
 })
 

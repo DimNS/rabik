@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { pickVariant } from './renderer.ts'
+import { facingAngle, pickVariant } from './renderer.ts'
 
 describe('pickVariant', () => {
     test('детерминирован: те же аргументы — тот же вариант', () => {
@@ -38,5 +38,14 @@ describe('pickVariant', () => {
             }
         }
         expect(a).not.toEqual(b)
+    })
+})
+
+describe('facingAngle', () => {
+    test('вверх — без поворота, остальные — на 90°', () => {
+        expect(facingAngle('up')).toBe(0)
+        expect(facingAngle('right')).toBe(Math.PI / 2)
+        expect(facingAngle('down')).toBe(Math.PI)
+        expect(facingAngle('left')).toBe(-Math.PI / 2)
     })
 })

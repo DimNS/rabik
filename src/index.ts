@@ -55,12 +55,14 @@ async function bootstrap(): Promise<void> {
     )
 
     let layout: Layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
+    let facing: Dir = 'up'
     const renderer = createRenderer({
         ctx: game.ctx,
         tiles,
         rabbit,
         animator,
         getLayout: () => layout,
+        getFacing: () => facing,
         tileSeed: level.tileSeed ?? hashLevelId(level.id),
     })
 
@@ -69,16 +71,21 @@ async function bootstrap(): Promise<void> {
     attachPointer(queue, canvas)
 
     let announced = false
+    let announcedGameOver = false
     const loop = createGameLoop(
         (dtMs) => {
             animator.advance(dtMs)
             const dir = queue.shift()
             if (dir && tryMove(state, dir)) {
+                facing = dir
                 renderer.redrawTile(state.player.x, state.player.y, state)
             }
             if (state.solved && !announced) {
                 announced = true
                 console.log('Уровень решён: вся земля замощена')
+            } else if (state.stuck && !announcedGameOver) {
+                announcedGameOver = true
+                console.log('Игра окончена: ходов больше нет')
             }
         },
         () => renderer.render(state),
