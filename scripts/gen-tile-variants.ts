@@ -6,10 +6,10 @@ const TILE_TYPES = ['wall', 'soil', 'road'] as const
 type TileType = (typeof TILE_TYPES)[number]
 
 const RECIPE_TYPE: Record<string, TileType> = {
-    brick: 'wall',
-    stone: 'wall',
-    grass: 'wall',
-    water: 'wall',
+    grass1: 'wall',
+    grass2: 'wall',
+    grass3: 'wall',
+    grass4: 'wall',
     earth: 'soil',
     asphalt: 'road',
 }
@@ -79,114 +79,43 @@ function clamp255(v: number): number {
     return v < 0 ? 0 : v > 255 ? 255 : Math.round(v)
 }
 
-function renderBrick(rand: () => number): Uint8Array {
-    const noise = makeNoise(rand, 8)
-    const data = new Uint8Array(TILE * TILE * 4)
-    // BW/BH делят TILE (130 = 5×26 = 10×13), покрытие шума — ровно 1 период
-    // решётки: одинаковые варианты в соседних клетках сшиваются без швов.
-    const BW = 26
-    const BH = 13
-    const M = 2
-    for (let y = 0; y < TILE; y++) {
-        const row = Math.floor(y / BH)
-        const off = (row % 2) * (BW / 2)
-        const ly = y - row * BH
-        for (let x = 0; x < TILE; x++) {
-            const bx = (((x + off) % BW) + BW) % BW
-            const n = noise((x * 8) / TILE, (y * 8) / TILE)
-            let r: number
-            let g: number
-            let b: number
-            if (bx < M || ly < M) {
-                const v = 52 + n * 16
-                r = v + 6
-                g = v
-                b = v + 2
-            } else {
-                const brickId = row * 64 + Math.floor((x + off) / BW)
-                const h = Math.imul(brickId, 2654435761) >>> 0
-                const shade = h / 4294967296
-                r = 138 + shade * 32 + (n - 0.5) * 26
-                g = 60 + shade * 20 + (n - 0.5) * 18
-                b = 46 + shade * 14 + (n - 0.5) * 14
-            }
-            const i = (y * TILE + x) * 4
-            data[i] = clamp255(r)
-            data[i + 1] = clamp255(g)
-            data[i + 2] = clamp255(b)
-            data[i + 3] = 255
-        }
-    }
-    return data
+interface GrassCfg {
+    baseCells: number
+    grainCells: number
+    r0: number
+    r1: number
+    g0: number
+    g1: number
+    b0: number
+    b1: number
+    blades: number
+    bladeMin: number
+    bladeVar: number
+    bladeAmp: number
+    speckles: number
+    speckleAmp: number
 }
 
-function renderStone(rand: () => number): Uint8Array {
-    const noise = makeNoise(rand, 8)
-    const data = new Uint8Array(TILE * TILE * 4)
-    const N = 4
-    const px = new Float64Array(N * N)
-    const py = new Float64Array(N * N)
-    for (let j = 0; j < N; j++) {
-        for (let i = 0; i < N; i++) {
-            px[j * N + i] = ((i + 0.15 + rand() * 0.7) / N) * TILE
-            py[j * N + i] = ((j + 0.15 + rand() * 0.7) / N) * TILE
-        }
-    }
-    for (let y = 0; y < TILE; y++) {
-        for (let x = 0; x < TILE; x++) {
-            let d1 = Infinity
-            let d2 = Infinity
-            let cell = 0
-            for (let c = 0; c < N * N; c++) {
-                // Тороидальная дистанция: тайл сшивается сам с собой без швов.
-                let dx = Math.abs(x - (px[c] ?? 0))
-                if (dx > TILE / 2) dx = TILE - dx
-                let dy = Math.abs(y - (py[c] ?? 0))
-                if (dy > TILE / 2) dy = TILE - dy
-                const d = dx * dx + dy * dy
-                if (d < d1) {
-                    d2 = d1
-                    d1 = d
-                    cell = c
-                } else if (d < d2) {
-                    d2 = d
-                }
-            }
-            const n = noise((x * 8) / TILE, (y * 8) / TILE)
-            const h = Math.imul(cell * 2 + 1, 2246822519) >>> 0
-            const shade = h / 4294967296
-            let v = 118 + shade * 30 + (n - 0.5) * 30
-            if (Math.sqrt(d2) - Math.sqrt(d1) < 2.5) v *= 0.55
-            const i = (y * TILE + x) * 4
-            data[i] = clamp255(v + 8)
-            data[i + 1] = clamp255(v)
-            data[i + 2] = clamp255(v - 5)
-            data[i + 3] = 255
-        }
-    }
-    return data
-}
-
-function renderGrass(rand: () => number): Uint8Array {
-    const base = makeNoise(rand, 6)
-    const grain = makeNoise(rand, 24)
+function renderGrassCfg(rand: () => number, cfg: GrassCfg): Uint8Array {
+    const base = makeNoise(rand, cfg.baseCells)
+    const grain = makeNoise(rand, cfg.grainCells)
     const data = new Uint8Array(TILE * TILE * 4)
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n1 = base((x * 6) / TILE, (y * 6) / TILE)
-            const n2 = grain((x * 24) / TILE, (y * 24) / TILE)
+            const n1 = base((x * cfg.baseCells) / TILE, (y * cfg.baseCells) / TILE)
+            const n2 = grain((x * cfg.grainCells) / TILE, (y * cfg.grainCells) / TILE)
             const i = (y * TILE + x) * 4
-            data[i] = clamp255(58 + n1 * 44 + (n2 - 0.5) * 22)
-            data[i + 1] = clamp255(118 + n1 * 52 + (n2 - 0.5) * 26)
-            data[i + 2] = clamp255(44 + n1 * 30 + (n2 - 0.5) * 18)
+            data[i] = clamp255(cfg.r0 + n1 * cfg.r1 + (n2 - 0.5) * 22)
+            data[i + 1] = clamp255(cfg.g0 + n1 * cfg.g1 + (n2 - 0.5) * 26)
+            data[i + 2] = clamp255(cfg.b0 + n1 * cfg.b1 + (n2 - 0.5) * 18)
             data[i + 3] = 255
         }
     }
-    for (let k = 0; k < 500; k++) {
+    for (let k = 0; k < cfg.blades; k++) {
         const bx = Math.floor(rand() * TILE)
         const by = Math.floor(rand() * TILE)
-        const len = 3 + Math.floor(rand() * 4)
-        const d = rand() < 0.5 ? 22 : -22
+        const len = cfg.bladeMin + Math.floor(rand() * cfg.bladeVar)
+        const d = rand() < 0.5 ? cfg.bladeAmp : -cfg.bladeAmp
         for (let s = 0; s < len; s++) {
             // Заворот по вертикали: травинка через край продолжается с другой стороны.
             const yy = (((by - s) % TILE) + TILE) % TILE
@@ -196,27 +125,94 @@ function renderGrass(rand: () => number): Uint8Array {
             data[i + 2] = clamp255((data[i + 2] ?? 0) + d * 0.4)
         }
     }
+    for (let k = 0; k < cfg.speckles; k++) {
+        const dx = Math.floor(rand() * TILE)
+        const dy = Math.floor(rand() * TILE)
+        const d = cfg.speckleAmp
+        const i = (dy * TILE + dx) * 4
+        data[i] = clamp255((data[i] ?? 0) + d)
+        data[i + 1] = clamp255((data[i + 1] ?? 0) + d)
+        data[i + 2] = clamp255((data[i + 2] ?? 0) + d)
+    }
     return data
 }
 
-function renderWater(rand: () => number): Uint8Array {
-    const base = makeNoise(rand, 6)
-    const ripple = makeNoise(rand, 16)
-    const data = new Uint8Array(TILE * TILE * 4)
-    for (let y = 0; y < TILE; y++) {
-        for (let x = 0; x < TILE; x++) {
-            const n = base((x * 6) / TILE, (y * 6) / TILE)
-            // 7 волн на тайл (было 0.35 рад/px ≈ 7.2 волн): стык сверху/снизу сшит.
-            const wave = Math.sin((y * Math.PI * 2 * 7) / TILE + n * 3.5 + ripple((x * 16) / TILE, (y * 16) / TILE) * 4)
-            const glare = wave > 0.55 ? (wave - 0.55) * 70 : 0
-            const i = (y * TILE + x) * 4
-            data[i] = clamp255(32 + n * 30 + glare * 0.7)
-            data[i + 1] = clamp255(98 + n * 34 + glare)
-            data[i + 2] = clamp255(168 + n * 30 + glare * 0.8)
-            data[i + 3] = 255
-        }
-    }
-    return data
+// Четыре сильно разные травы для непроходимых клеток: классика, тёмная густая,
+// сухая желтеющая, холодный мох со светлыми вкраплениями.
+function renderGrass1(rand: () => number): Uint8Array {
+    return renderGrassCfg(rand, {
+        baseCells: 6,
+        grainCells: 24,
+        r0: 58,
+        r1: 44,
+        g0: 118,
+        g1: 52,
+        b0: 44,
+        b1: 30,
+        blades: 500,
+        bladeMin: 3,
+        bladeVar: 4,
+        bladeAmp: 22,
+        speckles: 0,
+        speckleAmp: 0,
+    })
+}
+
+function renderGrass2(rand: () => number): Uint8Array {
+    return renderGrassCfg(rand, {
+        baseCells: 8,
+        grainCells: 32,
+        r0: 28,
+        r1: 32,
+        g0: 84,
+        g1: 42,
+        b0: 26,
+        b1: 24,
+        blades: 900,
+        bladeMin: 5,
+        bladeVar: 5,
+        bladeAmp: 20,
+        speckles: 0,
+        speckleAmp: 0,
+    })
+}
+
+function renderGrass3(rand: () => number): Uint8Array {
+    return renderGrassCfg(rand, {
+        baseCells: 5,
+        grainCells: 20,
+        r0: 128,
+        r1: 52,
+        g0: 120,
+        g1: 48,
+        b0: 50,
+        b1: 26,
+        blades: 350,
+        bladeMin: 2,
+        bladeVar: 3,
+        bladeAmp: 18,
+        speckles: 160,
+        speckleAmp: -28,
+    })
+}
+
+function renderGrass4(rand: () => number): Uint8Array {
+    return renderGrassCfg(rand, {
+        baseCells: 7,
+        grainCells: 28,
+        r0: 42,
+        r1: 36,
+        g0: 106,
+        g1: 44,
+        b0: 70,
+        b1: 38,
+        blades: 650,
+        bladeMin: 3,
+        bladeVar: 4,
+        bladeAmp: 22,
+        speckles: 140,
+        speckleAmp: 34,
+    })
 }
 
 function renderEarth(rand: () => number): Uint8Array {
@@ -289,10 +285,10 @@ const EDGE_SEED = 0
 const RIM = 12
 
 function renderVariant(recipe: string, rand: () => number): Uint8Array {
-    if (recipe === 'brick') return renderBrick(rand)
-    if (recipe === 'stone') return renderStone(rand)
-    if (recipe === 'grass') return renderGrass(rand)
-    if (recipe === 'water') return renderWater(rand)
+    if (recipe === 'grass1') return renderGrass1(rand)
+    if (recipe === 'grass2') return renderGrass2(rand)
+    if (recipe === 'grass3') return renderGrass3(rand)
+    if (recipe === 'grass4') return renderGrass4(rand)
     if (recipe === 'earth') return renderEarth(rand)
     if (recipe === 'asphalt') return renderAsphalt(rand)
     fail(`неизвестный рецепт: ${recipe} (известные: ${ALL_RECIPES.join(', ')})`)

@@ -56,12 +56,12 @@ describe('gen-tile-variants: общая кромка рецепта', () => {
     test('варианты одного рецепта сшиваются краями, центр различается', async () => {
         const outDir = mkdtempSync(join(tmpdir(), 'gen-variants-rim-'))
         tmpRoots.push(outDir)
-        // Не brick: у кирпича шов идёт по раствору между оттенками — глаз читает его как кладку.
-        expect(runGen(outDir, 'stone,grass,water,earth,asphalt', '7,8')).toBe(0)
+        expect(runGen(outDir, 'grass1,grass2,grass3,grass4,earth,asphalt', '7,8')).toBe(0)
         for (const [type, recipe] of [
-            ['wall', 'stone'],
-            ['wall', 'grass'],
-            ['wall', 'water'],
+            ['wall', 'grass1'],
+            ['wall', 'grass2'],
+            ['wall', 'grass3'],
+            ['wall', 'grass4'],
             ['soil', 'earth'],
             ['road', 'asphalt'],
         ] as const) {
@@ -74,13 +74,28 @@ describe('gen-tile-variants: общая кромка рецепта', () => {
         }
     })
 
+    test('травы grass1..grass4 сильно различаются между собой', async () => {
+        const outDir = mkdtempSync(join(tmpdir(), 'gen-variants-diff-'))
+        tmpRoots.push(outDir)
+        expect(runGen(outDir, 'grass1,grass2,grass3,grass4', '1')).toBe(0)
+        const imgs = []
+        for (const recipe of ['grass1', 'grass2', 'grass3', 'grass4']) {
+            imgs.push(await loadJpg(join(outDir, 'wall', `${recipe}-1.jpg`)))
+        }
+        for (let i = 0; i < imgs.length; i++) {
+            for (let j = i + 1; j < imgs.length; j++) {
+                expect(centerSpread(imgs[i] as Uint8Array, imgs[j] as Uint8Array)).toBeGreaterThan(15)
+            }
+        }
+    })
+
     test('тот же seed даёт попиксельно идентичный файл', async () => {
         const first = mkdtempSync(join(tmpdir(), 'gen-variants-det-a-'))
         const second = mkdtempSync(join(tmpdir(), 'gen-variants-det-b-'))
         tmpRoots.push(first, second)
-        expect(runGen(first, 'water,earth', '5')).toBe(0)
-        expect(runGen(second, 'water,earth', '5')).toBe(0)
-        for (const file of ['wall/water-5.jpg', 'soil/earth-5.jpg']) {
+        expect(runGen(first, 'grass1,earth', '5')).toBe(0)
+        expect(runGen(second, 'grass1,earth', '5')).toBe(0)
+        for (const file of ['wall/grass1-5.jpg', 'soil/earth-5.jpg']) {
             const a = new Uint8Array(await Bun.file(join(first, file)).arrayBuffer())
             const b = new Uint8Array(await Bun.file(join(second, file)).arrayBuffer())
             expect(a).toEqual(b)

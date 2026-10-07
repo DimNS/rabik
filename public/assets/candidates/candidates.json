@@ -3,75 +3,75 @@
     "candidates": [
         {
             "type": "wall",
-            "recipe": "brick",
+            "recipe": "grass1",
             "seed": 1,
-            "file": "wall/brick-1.jpg"
+            "file": "wall/grass1-1.jpg"
         },
         {
             "type": "wall",
-            "recipe": "brick",
+            "recipe": "grass1",
             "seed": 2,
-            "file": "wall/brick-2.jpg"
+            "file": "wall/grass1-2.jpg"
         },
         {
             "type": "wall",
-            "recipe": "brick",
+            "recipe": "grass1",
             "seed": 3,
-            "file": "wall/brick-3.jpg"
+            "file": "wall/grass1-3.jpg"
         },
         {
             "type": "wall",
-            "recipe": "grass",
+            "recipe": "grass2",
             "seed": 1,
-            "file": "wall/grass-1.jpg"
+            "file": "wall/grass2-1.jpg"
         },
         {
             "type": "wall",
-            "recipe": "grass",
+            "recipe": "grass2",
             "seed": 2,
-            "file": "wall/grass-2.jpg"
+            "file": "wall/grass2-2.jpg"
         },
         {
             "type": "wall",
-            "recipe": "grass",
+            "recipe": "grass2",
             "seed": 3,
-            "file": "wall/grass-3.jpg"
+            "file": "wall/grass2-3.jpg"
         },
         {
             "type": "wall",
-            "recipe": "stone",
+            "recipe": "grass3",
             "seed": 1,
-            "file": "wall/stone-1.jpg"
+            "file": "wall/grass3-1.jpg"
         },
         {
             "type": "wall",
-            "recipe": "stone",
+            "recipe": "grass3",
             "seed": 2,
-            "file": "wall/stone-2.jpg"
+            "file": "wall/grass3-2.jpg"
         },
         {
             "type": "wall",
-            "recipe": "stone",
+            "recipe": "grass3",
             "seed": 3,
-            "file": "wall/stone-3.jpg"
+            "file": "wall/grass3-3.jpg"
         },
         {
             "type": "wall",
-            "recipe": "water",
+            "recipe": "grass4",
             "seed": 1,
-            "file": "wall/water-1.jpg"
+            "file": "wall/grass4-1.jpg"
         },
         {
             "type": "wall",
-            "recipe": "water",
+            "recipe": "grass4",
             "seed": 2,
-            "file": "wall/water-2.jpg"
+            "file": "wall/grass4-2.jpg"
         },
         {
             "type": "wall",
-            "recipe": "water",
+            "recipe": "grass4",
             "seed": 3,
-            "file": "wall/water-3.jpg"
+            "file": "wall/grass4-3.jpg"
         },
         {
             "type": "soil",
