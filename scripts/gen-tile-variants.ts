@@ -82,8 +82,10 @@ function clamp255(v: number): number {
 function renderBrick(rand: () => number): Uint8Array {
     const noise = makeNoise(rand, 8)
     const data = new Uint8Array(TILE * TILE * 4)
-    const BW = 32
-    const BH = 16
+    // BW/BH делят TILE (130 = 5×26 = 10×13), покрытие шума — ровно 1 период
+    // решётки: одинаковые варианты в соседних клетках сшиваются без швов.
+    const BW = 26
+    const BH = 13
     const M = 2
     for (let y = 0; y < TILE; y++) {
         const row = Math.floor(y / BH)
@@ -91,7 +93,7 @@ function renderBrick(rand: () => number): Uint8Array {
         const ly = y - row * BH
         for (let x = 0; x < TILE; x++) {
             const bx = (((x + off) % BW) + BW) % BW
-            const n = noise(x * 0.08, y * 0.08)
+            const n = noise((x * 8) / TILE, (y * 8) / TILE)
             let r: number
             let g: number
             let b: number
@@ -136,8 +138,11 @@ function renderStone(rand: () => number): Uint8Array {
             let d2 = Infinity
             let cell = 0
             for (let c = 0; c < N * N; c++) {
-                const dx = x - (px[c] ?? 0)
-                const dy = y - (py[c] ?? 0)
+                // Тороидальная дистанция: тайл сшивается сам с собой без швов.
+                let dx = Math.abs(x - (px[c] ?? 0))
+                if (dx > TILE / 2) dx = TILE - dx
+                let dy = Math.abs(y - (py[c] ?? 0))
+                if (dy > TILE / 2) dy = TILE - dy
                 const d = dx * dx + dy * dy
                 if (d < d1) {
                     d2 = d1
@@ -147,7 +152,7 @@ function renderStone(rand: () => number): Uint8Array {
                     d2 = d
                 }
             }
-            const n = noise(x * 0.07, y * 0.07)
+            const n = noise((x * 8) / TILE, (y * 8) / TILE)
             const h = Math.imul(cell * 2 + 1, 2246822519) >>> 0
             const shade = h / 4294967296
             let v = 118 + shade * 30 + (n - 0.5) * 30
@@ -168,8 +173,8 @@ function renderGrass(rand: () => number): Uint8Array {
     const data = new Uint8Array(TILE * TILE * 4)
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n1 = base(x * 0.06, y * 0.06)
-            const n2 = grain(x * 0.25, y * 0.25)
+            const n1 = base((x * 6) / TILE, (y * 6) / TILE)
+            const n2 = grain((x * 24) / TILE, (y * 24) / TILE)
             const i = (y * TILE + x) * 4
             data[i] = clamp255(58 + n1 * 44 + (n2 - 0.5) * 22)
             data[i + 1] = clamp255(118 + n1 * 52 + (n2 - 0.5) * 26)
@@ -183,8 +188,8 @@ function renderGrass(rand: () => number): Uint8Array {
         const len = 3 + Math.floor(rand() * 4)
         const d = rand() < 0.5 ? 22 : -22
         for (let s = 0; s < len; s++) {
-            const yy = by - s
-            if (yy < 0) break
+            // Заворот по вертикали: травинка через край продолжается с другой стороны.
+            const yy = (((by - s) % TILE) + TILE) % TILE
             const i = (yy * TILE + bx) * 4
             data[i] = clamp255((data[i] ?? 0) + d * 0.5)
             data[i + 1] = clamp255((data[i + 1] ?? 0) + d)
@@ -200,8 +205,9 @@ function renderWater(rand: () => number): Uint8Array {
     const data = new Uint8Array(TILE * TILE * 4)
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n = base(x * 0.05, y * 0.05)
-            const wave = Math.sin((y + n * 10) * 0.35 + ripple(x * 0.1, y * 0.05) * 4)
+            const n = base((x * 6) / TILE, (y * 6) / TILE)
+            // 7 волн на тайл (было 0.35 рад/px ≈ 7.2 волн): стык сверху/снизу сшит.
+            const wave = Math.sin((y * Math.PI * 2 * 7) / TILE + n * 3.5 + ripple((x * 16) / TILE, (y * 16) / TILE) * 4)
             const glare = wave > 0.55 ? (wave - 0.55) * 70 : 0
             const i = (y * TILE + x) * 4
             data[i] = clamp255(32 + n * 30 + glare * 0.7)
@@ -219,8 +225,8 @@ function renderEarth(rand: () => number): Uint8Array {
     const data = new Uint8Array(TILE * TILE * 4)
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n1 = base(x * 0.06, y * 0.06)
-            const n2 = grain(x * 0.3, y * 0.3)
+            const n1 = base((x * 6) / TILE, (y * 6) / TILE)
+            const n2 = grain((x * 32) / TILE, (y * 32) / TILE)
             const i = (y * TILE + x) * 4
             data[i] = clamp255(124 + (n1 - 0.5) * 44 + (n2 - 0.5) * 30)
             data[i + 1] = clamp255(90 + (n1 - 0.5) * 36 + (n2 - 0.5) * 26)
@@ -247,8 +253,8 @@ function renderAsphalt(rand: () => number): Uint8Array {
     // Без разметки: тайл встаёт и вертикально, любая полоса даст визуальный шов.
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n1 = base(x * 0.06, y * 0.06)
-            const n2 = grain(x * 0.3, y * 0.3)
+            const n1 = base((x * 6) / TILE, (y * 6) / TILE)
+            const n2 = grain((x * 32) / TILE, (y * 32) / TILE)
             const v = 88 + (n1 - 0.5) * 26 + (n2 - 0.5) * 18
             const i = (y * TILE + x) * 4
             data[i] = clamp255(v + 2)
@@ -270,14 +276,41 @@ function renderAsphalt(rand: () => number): Uint8Array {
 }
 
 function renderRecipe(recipe: string, seed: number): RgbaImage {
-    const rand = mulberry32(seed)
-    if (recipe === 'brick') return { w: TILE, h: TILE, data: renderBrick(rand) }
-    if (recipe === 'stone') return { w: TILE, h: TILE, data: renderStone(rand) }
-    if (recipe === 'grass') return { w: TILE, h: TILE, data: renderGrass(rand) }
-    if (recipe === 'water') return { w: TILE, h: TILE, data: renderWater(rand) }
-    if (recipe === 'earth') return { w: TILE, h: TILE, data: renderEarth(rand) }
-    if (recipe === 'asphalt') return { w: TILE, h: TILE, data: renderAsphalt(rand) }
+    const data = renderVariant(recipe, mulberry32(seed))
+    // Общая кромка: край одинаков у всех вариантов рецепта и сшивается
+    // с любым из них, вариативность живёт внутри (см. applySharedRim).
+    if (seed !== EDGE_SEED) applySharedRim(data, renderVariant(recipe, mulberry32(EDGE_SEED)))
+    return { w: TILE, h: TILE, data }
+}
+
+// Кромка, общая для всех вариантов рецепта: тот же рецепт с фиксированным
+// seed. Ширина меньше половины тайла, вес — smoothstep от 1 у края к 0 внутрь.
+const EDGE_SEED = 0
+const RIM = 12
+
+function renderVariant(recipe: string, rand: () => number): Uint8Array {
+    if (recipe === 'brick') return renderBrick(rand)
+    if (recipe === 'stone') return renderStone(rand)
+    if (recipe === 'grass') return renderGrass(rand)
+    if (recipe === 'water') return renderWater(rand)
+    if (recipe === 'earth') return renderEarth(rand)
+    if (recipe === 'asphalt') return renderAsphalt(rand)
     fail(`неизвестный рецепт: ${recipe} (известные: ${ALL_RECIPES.join(', ')})`)
+}
+
+function applySharedRim(data: Uint8Array, edge: Uint8Array): void {
+    for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+            const d = Math.min(x, y, TILE - 1 - x, TILE - 1 - y)
+            if (d >= RIM) continue
+            const t = 1 - d / RIM
+            const w = t * t * (3 - 2 * t)
+            const i = (y * TILE + x) * 4
+            for (let c = 0; c < 3; c++) {
+                data[i + c] = Math.round((edge[i + c] ?? 0) * w + (data[i + c] ?? 0) * (1 - w))
+            }
+        }
+    }
 }
 
 const outDir = argValue('--out-dir') ?? new URL('../public/assets/candidates/', import.meta.url).pathname

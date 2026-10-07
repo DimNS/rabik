@@ -13,7 +13,7 @@ check:
 test:
 	@bun run test
 
-dev:
+dev: build
 	@bun run dev
 
 build:

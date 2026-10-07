@@ -5,9 +5,9 @@
     "tiles": [
         ["wall", "wall", "wall", "wall", "wall", "wall", "wall"],
         ["wall", "road", "soil", "soil", "soil", "soil", "wall"],
-        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
-        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
-        ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
+        ["wall", "wall", "wall", "wall", "wall", "soil", "wall"],
+        ["wall", "soil", "soil", "soil", "wall", "soil", "wall"],
+        ["wall", "soil", "wall", "wall", "wall", "soil", "wall"],
         ["wall", "soil", "soil", "soil", "soil", "soil", "wall"],
         ["wall", "wall", "wall", "wall", "wall", "wall", "wall"]
     ],

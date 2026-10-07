@@ -26,22 +26,28 @@ function countSoilIn(grid: CellType[][]): number {
     return grid.flat().filter((cell) => cell === 'soil').length
 }
 
-function snakeRoute(state: GameState): Dir[] {
-    const dirs: Dir[] = []
-    let { x, y } = state.player
-    const lastRow = state.height - 2
-    let right = true
-    for (let row = y; row <= lastRow; row++) {
-        while (x !== (right ? state.width - 2 : 1)) {
-            dirs.push(right ? 'right' : 'left')
-            x += right ? 1 : -1
-        }
-        if (row === lastRow) break
-        dirs.push('down')
-        y++
-        right = !right
-    }
-    return dirs
+// Маршрут под level-001 (лабиринт): вдоль верхней строки, вниз по правому
+// столбцу, по низу налево, вверх по левому столбцу и в тупичок (3,3).
+// Каждый шаг — на soil, конец — победа (solved приоритетнее stuck).
+function labyrinthRoute(): Dir[] {
+    return [
+        'right',
+        'right',
+        'right',
+        'right',
+        'down',
+        'down',
+        'down',
+        'down',
+        'left',
+        'left',
+        'left',
+        'left',
+        'up',
+        'up',
+        'right',
+        'right',
+    ]
 }
 
 function firstNeighbourSoil(state: GameState, from: Vec2): Vec2 {
@@ -197,7 +203,7 @@ describe('маршрут и инварианты', () => {
         const soilBefore = state.soilCount
 
         let steps = 0
-        for (const dir of snakeRoute(state)) {
+        for (const dir of labyrinthRoute()) {
             const before = { ...state.player }
             expect(tryMove(state, dir)).toBe(true)
             steps++
@@ -205,7 +211,6 @@ describe('маршрут и инварианты', () => {
             expect(cellAt(state.grid, state.player)).toBe('road')
             expect(tryMove(state, OPPOSITE[dir])).toBe(false)
             expect(state.player).not.toEqual(before)
-            expect(tryMove(state, dirBetween(state.player, start))).toBe(false)
         }
 
         expect(steps).toBe(soilBefore)
@@ -216,7 +221,7 @@ describe('маршрут и инварианты', () => {
 
     test('пока осталась soil — solved не меняется, на последнем ходе победа', async () => {
         const state = createGameState(await loadTestLevel())
-        const route = snakeRoute(state)
+        const route = labyrinthRoute()
 
         for (const [i, dir] of route.entries()) {
             expect(tryMove(state, dir)).toBe(true)

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Швы тайлов — стыковка вариантов</title>
+<style>
+body { font-family: system-ui, sans-serif; background: #141414; color: #eee; margin: 0; padding: 16px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #bbb; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(410px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 8px; text-align: center; margin: 0; }
+.card canvas { width: 390px; max-width: 100%; height: auto; image-rendering: pixelated; background: #000; }
+.card figcaption { font-size: 12px; color: #ccc; margin-top: 6px; }
+.hint { font-size: 13px; color: #999; margin: 8px 0; }
+h2 { margin: 20px 0 8px; font-size: 18px; }
+code { color: #9ad; }
+</style>
+</head>
+<body>
+<h1>Швы тайлов</h1>
+<div class="controls">
+<label>tiles.json <input type="file" id="atlasFile" accept=".json,application/json" /></label>
+<span class="hint">По умолчанию грузится через fetch из <code>../public/assets/sprites/…</code> (открыть через <code>bunx serve .</code> из корня). Центр квадрата — вариант V, кольцо — вариант V+1: на внутренних границах видны швы V↔V+1, на границах кольца — самосшивка V+1. Кромка стен и кластеры 2×2 из игры здесь не применяются — только стыки текстур.</span>
+</div>
+<p class="hint" id="status"></p>
+<div id="sections"></div>
+<script type="module">
+const ATLAS_URL = '../public/assets/sprites/tiles.json';
+const TYPES = ['wall', 'soil', 'road'];
+const status = document.getElementById('status');
+const sections = document.getElementById('sections');
+
+function say(t) { status.textContent = t; }
+function dirOf(url) { const i = url.lastIndexOf('/'); return i < 0 ? '' : url.slice(0, i + 1); }
+function el(tag, text) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; }
+
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ': HTTP ' + r.status);
+  return r.json();
+}
+
+function variantNames(data, type) {
+  const frames = data.frames ?? {};
+  return Object.keys(frames)
+    .filter((n) => new RegExp('^' + type + '_\\d+$').test(n))
+    .sort((a, b) => Number(a.slice(type.length + 1)) - Number(b.slice(type.length + 1)));
+}
+
+function loadSheet(url) {
+  const sheet = new Image();
+  sheet.src = url;
+  return sheet.decode
+    ? sheet.decode().then(() => sheet).catch(() => new Promise((res, rej) => { sheet.onload = () => res(sheet); sheet.onerror = rej; }))
+    : new Promise((res, rej) => { sheet.onload = () => res(sheet); sheet.onerror = rej; });
+}
+
+async function renderAtlas(data, base) {
+  sections.textContent = '';
+  const frames = data.frames ?? {};
+  const sheet = await loadSheet(base + (data.meta?.image ?? 'tiles.jpg'));
+  let squares = 0;
+  for (const type of TYPES) {
+    const names = variantNames(data, type);
+    if (!names.length) continue;
+    sections.append(el('h2', type + ' — вариантов: ' + names.length));
+    const grid = el('div');
+    grid.className = 'grid';
+    for (let i = 0; i < names.length; i++) {
+      const center = names[i];
+      const ring = names[(i + 1) % names.length];
+      const fc = frames[center].frame;
+      const fr = frames[ring].frame;
+      const t = fc.w;
+      const cv = document.createElement('canvas');
+      cv.width = t * 3;
+      cv.height = t * 3;
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      for (let cy = 0; cy < 3; cy++) {
+        for (let cx = 0; cx < 3; cx++) {
+          const f = cx === 1 && cy === 1 ? fc : fr;
+          ctx.drawImage(sheet, f.x, f.y, f.w, f.h, cx * t, cy * t, t, t);
+        }
+      }
+      const fig = el('figure');
+      fig.className = 'card';
+      fig.append(cv, el('figcaption', center + ' × ' + ring));
+      grid.append(fig);
+      squares++;
+    }
+    sections.append(grid);
+  }
+  say(squares ? 'Готово: квадратов ' + squares + '.' : 'Вариантов wall_*/soil_*/road_* нет.');
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => { try { resolve(JSON.parse(r.result)); } catch (e) { reject(e); } };
+    r.onerror = reject;
+    r.readAsText(file);
+  });
+}
+
+document.getElementById('atlasFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    await renderAtlas(await readFile(f), dirOf(ATLAS_URL));
+    say('tiles.json загружен из файла: ' + f.name);
+  } catch (err) { say('Ошибка чтения ' + f.name + ': ' + err.message); }
+});
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (!f || !/\.json$/i.test(f.name)) return;
+  try {
+    await renderAtlas(await readFile(f), dirOf(ATLAS_URL));
+    say('Атлас из файла: ' + f.name);
+  } catch (err) { say('Ошибка чтения ' + f.name + ': ' + err.message); }
+});
+
+try {
+  await renderAtlas(await fetchJson(ATLAS_URL), dirOf(ATLAS_URL));
+} catch (e) {
+  say('Не загрузился tiles.json: ' + e.message + ' — выберите файл вручную.');
+}
+</script>
+</body>
+</html>
