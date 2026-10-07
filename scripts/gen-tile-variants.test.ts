@@ -37,6 +37,58 @@ function crossSeam(a: Uint8Array, b: Uint8Array): number {
     return sum / n
 }
 
+// Тот же шов по вертикали: низ A против верха B.
+function crossSeamV(a: Uint8Array, b: Uint8Array): number {
+    let sum = 0
+    let n = 0
+    for (let x = 0; x < TILE; x++) {
+        for (let c = 0; c < 3; c++) {
+            sum += Math.abs((a[((TILE - 1) * TILE + x) * 4 + c] ?? 0) - (b[x * 4 + c] ?? 0))
+            n++
+        }
+    }
+    return sum / n
+}
+
+// Средний цвет зоны: full — весь тайл, rim — только рамка 12px (чистый фон).
+function meanZone(img: Uint8Array, rimOnly: boolean): [number, number, number] {
+    let r = 0
+    let g = 0
+    let b = 0
+    let n = 0
+    for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+            if (rimOnly && Math.min(x, y, TILE - 1 - x, TILE - 1 - y) >= 12) continue
+            r += img[(y * TILE + x) * 4] ?? 0
+            g += img[(y * TILE + x) * 4 + 1] ?? 0
+            b += img[(y * TILE + x) * 4 + 2] ?? 0
+            n++
+        }
+    }
+    return [r / n, g / n, b / n]
+}
+
+function colorDist(a: [number, number, number], b: [number, number, number]): number {
+    return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+}
+
+// Пиксели, сильно отклоняющиеся от среднего (камни/объекты: тень+тело+блик).
+function strongCount(img: Uint8Array, mean: [number, number, number], rimOnly: boolean): number {
+    let n = 0
+    for (let y = 0; y < TILE; y++) {
+        for (let x = 0; x < TILE; x++) {
+            const d = Math.min(x, y, TILE - 1 - x, TILE - 1 - y)
+            if (rimOnly ? d >= 12 : d < 12) continue
+            const dev =
+                Math.abs((img[(y * TILE + x) * 4] ?? 0) - mean[0]) +
+                Math.abs((img[(y * TILE + x) * 4 + 1] ?? 0) - mean[1]) +
+                Math.abs((img[(y * TILE + x) * 4 + 2] ?? 0) - mean[2])
+            if (dev > 90) n++
+        }
+    }
+    return n
+}
+
 // Разброс внутри: центр двух вариантов обязан различаться (вариативность жива).
 function centerSpread(a: Uint8Array, b: Uint8Array): number {
     let sum = 0
@@ -68,9 +120,51 @@ describe('gen-tile-variants: общая кромка рецепта', () => {
             const a = await loadJpg(join(outDir, type, `${recipe}-7.jpg`))
             const b = await loadJpg(join(outDir, type, `${recipe}-8.jpg`))
             const seam = crossSeam(a, b)
+            const seamV = crossSeamV(a, b)
             const spread = centerSpread(a, b)
             expect(seam).toBeLessThan(12)
+            expect(seamV).toBeLessThan(12)
             expect(spread).toBeGreaterThan(seam)
+        }
+    })
+
+    test('травы grass1..grass4 на едином зелёном базисе, различаются объектами', async () => {
+        const outDir = mkdtempSync(join(tmpdir(), 'gen-variants-base-'))
+        tmpRoots.push(outDir)
+        expect(runGen(outDir, 'grass1,grass2,grass3,grass4', '7')).toBe(0)
+        const imgs = []
+        for (const recipe of ['grass1', 'grass2', 'grass3', 'grass4']) {
+            imgs.push(await loadJpg(join(outDir, 'wall', `${recipe}-7.jpg`)))
+        }
+        // Единый базис: рамка (чистый фон) почти идентична, полный средний близок.
+        for (let i = 0; i < imgs.length; i++) {
+            for (let j = i + 1; j < imgs.length; j++) {
+                expect(
+                    colorDist(meanZone(imgs[i] as Uint8Array, true), meanZone(imgs[j] as Uint8Array, true)),
+                ).toBeLessThan(8)
+                expect(
+                    colorDist(meanZone(imgs[i] as Uint8Array, false), meanZone(imgs[j] as Uint8Array, false)),
+                ).toBeLessThan(20)
+            }
+        }
+        // Объекты в центре дифференцируют: каждая пара различается сильнее порога.
+        for (let i = 0; i < imgs.length; i++) {
+            for (let j = i + 1; j < imgs.length; j++) {
+                expect(centerSpread(imgs[i] as Uint8Array, imgs[j] as Uint8Array)).toBeGreaterThan(15)
+            }
+        }
+    })
+
+    test('камни earth целиком внутри и контрастнее крапа', async () => {
+        const outDir = mkdtempSync(join(tmpdir(), 'gen-variants-stones-'))
+        tmpRoots.push(outDir)
+        expect(runGen(outDir, 'earth', '7,11,23')).toBe(0)
+        for (const seed of ['7', '11', '23']) {
+            const img = await loadJpg(join(outDir, 'soil', `earth-${seed}.jpg`))
+            const mean = meanZone(img, false)
+            // Камни в интерьере дают сильные отклонения, рамка чистая.
+            expect(strongCount(img, mean, false)).toBeGreaterThan(150)
+            expect(strongCount(img, mean, true)).toBeLessThan(40)
         }
     })
 

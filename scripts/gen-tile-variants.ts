@@ -79,15 +79,94 @@ function clamp255(v: number): number {
     return v < 0 ? 0 : v > 255 ? 255 : Math.round(v)
 }
 
+// Единая зелёная база всех трав: различия только объектами/травинками/крапом.
+const GRASS_BG = {
+    baseCells: 6,
+    grainCells: 24,
+    r0: 58,
+    r1: 44,
+    g0: 118,
+    g1: 52,
+    b0: 44,
+    b1: 30,
+} as const
+
+type RGB = [number, number, number]
+
+// Затемнение диска (тень объекта) на месте, множитель ~0.72.
+function shadeDisc(data: Uint8Array, cx: number, cy: number, r: number): void {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+        for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+            if (x < 0 || y < 0 || x >= TILE || y >= TILE) continue
+            const dx = x - cx
+            const dy = y - cy
+            if (dx * dx + dy * dy > r * r) continue
+            const i = (y * TILE + x) * 4
+            data[i] = clamp255((data[i] ?? 0) * 0.72)
+            data[i + 1] = clamp255((data[i + 1] ?? 0) * 0.72)
+            data[i + 2] = clamp255((data[i + 2] ?? 0) * 0.72)
+        }
+    }
+}
+
+function paintDisc(data: Uint8Array, cx: number, cy: number, r: number, col: RGB): void {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+        for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+            if (x < 0 || y < 0 || x >= TILE || y >= TILE) continue
+            const dx = x - cx
+            const dy = y - cy
+            if (dx * dx + dy * dy > r * r) continue
+            const i = (y * TILE + x) * 4
+            data[i] = col[0]
+            data[i + 1] = col[1]
+            data[i + 2] = col[2]
+        }
+    }
+}
+
+// Общий хелпер «тень (+2,+3) + тело + блик», один свет для всех объектов.
+// ponytail: плоские диски вместо спрайтов, объёма хватает для тайла 130px
+function blob(data: Uint8Array, cx: number, cy: number, r: number, body: RGB, hi: RGB): void {
+    shadeDisc(data, cx + 2, cy + 3, r)
+    paintDisc(data, cx, cy, r, body)
+    paintDisc(data, cx - r * 0.3, cy - r * 0.3, Math.max(1.5, r * 0.35), hi)
+}
+
+// Камень «контур + грань»: неровный силуэт из трёх лепестков, тёмный контур,
+// светлая грань сверху-слева. Плоский диск читался как шар — контур и грань
+// ломают идеальный круг.
+function stone(
+    data: Uint8Array,
+    rand: () => number,
+    cx: number,
+    cy: number,
+    r: number,
+    body: RGB,
+    dark: RGB,
+    light: RGB,
+): void {
+    shadeDisc(data, cx + 2, cy + 3, r + 1)
+    const lumps = [
+        { dx: 0, dy: 0, k: 1 },
+        { dx: r * 0.3, dy: r * 0.2, k: 0.7 },
+        { dx: -r * 0.25, dy: -r * 0.12, k: 0.55 },
+    ]
+    for (const lump of lumps) {
+        const rl = r * lump.k * (0.9 + rand() * 0.2)
+        paintDisc(data, cx + lump.dx, cy + lump.dy, rl + 1.2, dark)
+        paintDisc(data, cx + lump.dx, cy + lump.dy, rl, body)
+    }
+    paintDisc(data, cx - r * 0.25, cy - r * 0.3, r * 0.45, light)
+    paintDisc(data, cx - r * 0.3, cy - r * 0.35, Math.max(1.5, r * 0.15), [222, 222, 228])
+}
+
+// Случайный центр объекта: центральная зона, чтобы объект попадал в центр
+// тайла (тест дифференциации меряет центр) и не задевал рамку RIM.
+function objectCenter(rand: () => number): { cx: number; cy: number } {
+    return { cx: 48 + Math.floor(rand() * 24), cy: 48 + Math.floor(rand() * 24) }
+}
+
 interface GrassCfg {
-    baseCells: number
-    grainCells: number
-    r0: number
-    r1: number
-    g0: number
-    g1: number
-    b0: number
-    b1: number
     blades: number
     bladeMin: number
     bladeVar: number
@@ -97,28 +176,29 @@ interface GrassCfg {
 }
 
 function renderGrassCfg(rand: () => number, cfg: GrassCfg): Uint8Array {
-    const base = makeNoise(rand, cfg.baseCells)
-    const grain = makeNoise(rand, cfg.grainCells)
+    const base = makeNoise(rand, GRASS_BG.baseCells)
+    const grain = makeNoise(rand, GRASS_BG.grainCells)
     const data = new Uint8Array(TILE * TILE * 4)
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
-            const n1 = base((x * cfg.baseCells) / TILE, (y * cfg.baseCells) / TILE)
-            const n2 = grain((x * cfg.grainCells) / TILE, (y * cfg.grainCells) / TILE)
+            const n1 = base((x * GRASS_BG.baseCells) / TILE, (y * GRASS_BG.baseCells) / TILE)
+            const n2 = grain((x * GRASS_BG.grainCells) / TILE, (y * GRASS_BG.grainCells) / TILE)
             const i = (y * TILE + x) * 4
-            data[i] = clamp255(cfg.r0 + n1 * cfg.r1 + (n2 - 0.5) * 22)
-            data[i + 1] = clamp255(cfg.g0 + n1 * cfg.g1 + (n2 - 0.5) * 26)
-            data[i + 2] = clamp255(cfg.b0 + n1 * cfg.b1 + (n2 - 0.5) * 18)
+            data[i] = clamp255(GRASS_BG.r0 + n1 * GRASS_BG.r1 + (n2 - 0.5) * 22)
+            data[i + 1] = clamp255(GRASS_BG.g0 + n1 * GRASS_BG.g1 + (n2 - 0.5) * 26)
+            data[i + 2] = clamp255(GRASS_BG.b0 + n1 * GRASS_BG.b1 + (n2 - 0.5) * 18)
             data[i + 3] = 255
         }
     }
+    // Дискретный шум строго в интерьере [RIM, TILE-RIM): рамка остаётся чистым фоном.
     for (let k = 0; k < cfg.blades; k++) {
-        const bx = Math.floor(rand() * TILE)
-        const by = Math.floor(rand() * TILE)
+        const bx = RIM + Math.floor(rand() * (TILE - 2 * RIM))
+        const by = RIM + Math.floor(rand() * (TILE - 2 * RIM))
         const len = cfg.bladeMin + Math.floor(rand() * cfg.bladeVar)
         const d = rand() < 0.5 ? cfg.bladeAmp : -cfg.bladeAmp
         for (let s = 0; s < len; s++) {
-            // Заворот по вертикали: травинка через край продолжается с другой стороны.
-            const yy = (((by - s) % TILE) + TILE) % TILE
+            const yy = by - s
+            if (yy < RIM || yy >= TILE - RIM) break
             const i = (yy * TILE + bx) * 4
             data[i] = clamp255((data[i] ?? 0) + d * 0.5)
             data[i + 1] = clamp255((data[i + 1] ?? 0) + d)
@@ -126,8 +206,8 @@ function renderGrassCfg(rand: () => number, cfg: GrassCfg): Uint8Array {
         }
     }
     for (let k = 0; k < cfg.speckles; k++) {
-        const dx = Math.floor(rand() * TILE)
-        const dy = Math.floor(rand() * TILE)
+        const dx = RIM + Math.floor(rand() * (TILE - 2 * RIM))
+        const dy = RIM + Math.floor(rand() * (TILE - 2 * RIM))
         const d = cfg.speckleAmp
         const i = (dy * TILE + dx) * 4
         data[i] = clamp255((data[i] ?? 0) + d)
@@ -137,18 +217,9 @@ function renderGrassCfg(rand: () => number, cfg: GrassCfg): Uint8Array {
     return data
 }
 
-// Четыре сильно разные травы для непроходимых клеток: классика, тёмная густая,
-// сухая желтеющая, холодный мох со светлыми вкраплениями.
+// grass1 — пучок тонких наклонных тёмно-зелёных травинок вокруг центра.
 function renderGrass1(rand: () => number): Uint8Array {
-    return renderGrassCfg(rand, {
-        baseCells: 6,
-        grainCells: 24,
-        r0: 58,
-        r1: 44,
-        g0: 118,
-        g1: 52,
-        b0: 44,
-        b1: 30,
+    const data = renderGrassCfg(rand, {
         blades: 500,
         bladeMin: 3,
         bladeVar: 4,
@@ -156,18 +227,41 @@ function renderGrass1(rand: () => number): Uint8Array {
         speckles: 0,
         speckleAmp: 0,
     })
+    const { cx, cy } = objectCenter(rand)
+    shadeDisc(data, cx + 1, cy + 2, 8)
+    for (let k = 0; k < 44; k++) {
+        const light = rand() < 0.25
+        const col: RGB = light
+            ? [112, 164, 78]
+            : [44 + Math.floor(rand() * 14), 92 + Math.floor(rand() * 20), 36 + Math.floor(rand() * 12)]
+        let xx = cx + Math.floor((rand() - 0.5) * 26)
+        let yy = cy + Math.floor((rand() - 0.5) * 12)
+        const slant = (rand() - 0.5) * 0.9
+        let acc = 0
+        const len = 8 + Math.floor(rand() * 9)
+        for (let s = 0; s < len; s++) {
+            if (xx < RIM || xx >= TILE - RIM || yy < RIM || yy >= TILE - RIM) break
+            const i = (yy * TILE + xx) * 4
+            data[i] = col[0]
+            data[i + 1] = col[1]
+            data[i + 2] = col[2]
+            acc += slant
+            if (acc > 0.5) {
+                xx++
+                acc -= 1
+            } else if (acc < -0.5) {
+                xx--
+                acc += 1
+            }
+            yy--
+        }
+    }
+    return data
 }
 
+// grass2 — 2–3 тёмных куста вокруг центра.
 function renderGrass2(rand: () => number): Uint8Array {
-    return renderGrassCfg(rand, {
-        baseCells: 8,
-        grainCells: 32,
-        r0: 28,
-        r1: 32,
-        g0: 84,
-        g1: 42,
-        b0: 26,
-        b1: 24,
+    const data = renderGrassCfg(rand, {
         blades: 900,
         bladeMin: 5,
         bladeVar: 5,
@@ -175,18 +269,20 @@ function renderGrass2(rand: () => number): Uint8Array {
         speckles: 0,
         speckleAmp: 0,
     })
+    const { cx, cy } = objectCenter(rand)
+    const n = 2 + Math.floor(rand() * 2)
+    for (let k = 0; k < n; k++) {
+        const ox = cx + Math.floor((rand() - 0.5) * 26)
+        const oy = cy + Math.floor((rand() - 0.5) * 26)
+        const r = 8 + Math.floor(rand() * 4)
+        blob(data, ox, oy, r, [34, 86, 30], [66, 128, 54])
+    }
+    return data
 }
 
+// grass3 — одно дерево: ствол + 2–3 диска кроны.
 function renderGrass3(rand: () => number): Uint8Array {
-    return renderGrassCfg(rand, {
-        baseCells: 5,
-        grainCells: 20,
-        r0: 128,
-        r1: 52,
-        g0: 120,
-        g1: 48,
-        b0: 50,
-        b1: 26,
+    const data = renderGrassCfg(rand, {
         blades: 350,
         bladeMin: 2,
         bladeVar: 3,
@@ -194,18 +290,29 @@ function renderGrass3(rand: () => number): Uint8Array {
         speckles: 160,
         speckleAmp: -28,
     })
+    const { cx, cy } = objectCenter(rand)
+    shadeDisc(data, cx + 2, cy + 3, 22)
+    for (let y = cy; y < Math.min(cy + 16, TILE - RIM); y++) {
+        for (let x = cx - 2; x <= cx + 2; x++) {
+            if (x < RIM || x >= TILE - RIM || y < RIM) continue
+            const i = (y * TILE + x) * 4
+            data[i] = 96
+            data[i + 1] = 66
+            data[i + 2] = 40
+        }
+    }
+    const n = 2 + Math.floor(rand() * 2)
+    for (let k = 0; k < n; k++) {
+        const ox = cx + Math.floor((rand() - 0.5) * 16)
+        const oy = cy - 8 + Math.floor((rand() - 0.5) * 14)
+        blob(data, ox, oy, 13 + Math.floor(rand() * 7), [30, 78, 32], [62, 122, 52])
+    }
+    return data
 }
 
+// grass4 — один серый камень с бликом.
 function renderGrass4(rand: () => number): Uint8Array {
-    return renderGrassCfg(rand, {
-        baseCells: 7,
-        grainCells: 28,
-        r0: 42,
-        r1: 36,
-        g0: 106,
-        g1: 44,
-        b0: 70,
-        b1: 38,
+    const data = renderGrassCfg(rand, {
         blades: 650,
         bladeMin: 3,
         bladeVar: 4,
@@ -213,6 +320,9 @@ function renderGrass4(rand: () => number): Uint8Array {
         speckles: 140,
         speckleAmp: 34,
     })
+    const { cx, cy } = objectCenter(rand)
+    stone(data, rand, cx, cy, 14 + Math.floor(rand() * 5), [128, 128, 132], [74, 74, 80], [180, 180, 186])
+    return data
 }
 
 function renderEarth(rand: () => number): Uint8Array {
@@ -231,13 +341,38 @@ function renderEarth(rand: () => number): Uint8Array {
         }
     }
     for (let k = 0; k < 260; k++) {
-        const dx = Math.floor(rand() * TILE)
-        const dy = Math.floor(rand() * TILE)
+        const dx = RIM + Math.floor(rand() * (TILE - 2 * RIM))
+        const dy = RIM + Math.floor(rand() * (TILE - 2 * RIM))
         const d = rand() < 0.5 ? -26 : 24
         const i = (dy * TILE + dx) * 4
         data[i] = clamp255((data[i] ?? 0) + d)
         data[i + 1] = clamp255((data[i + 1] ?? 0) + d)
         data[i + 2] = clamp255((data[i + 2] ?? 0) + d)
+    }
+    // Камни по размеру: 6–9 мелких, два средних или один крупный.
+    // Центры — rejection sampling целиком внутри, без пересечений.
+    const roll = rand()
+    let radii: number[]
+    if (roll < 0.4) {
+        const n = 6 + Math.floor(rand() * 4)
+        radii = Array.from({ length: n }, () => 3 + Math.floor(rand() * 4))
+    } else if (roll < 0.7) {
+        radii = [9 + Math.floor(rand() * 5), 9 + Math.floor(rand() * 5)]
+    } else {
+        radii = [16 + Math.floor(rand() * 7)]
+    }
+    const placed: Array<{ x: number; y: number; r: number }> = []
+    for (const r of radii) {
+        for (let attempt = 0; attempt < 40; attempt++) {
+            const cx = RIM + r + 2 + Math.floor(rand() * (TILE - 2 * RIM - 2 * r - 4))
+            const cy = RIM + r + 2 + Math.floor(rand() * (TILE - 2 * RIM - 2 * r - 4))
+            if (placed.some((p) => (p.x - cx) ** 2 + (p.y - cy) ** 2 < (p.r + r + 2) ** 2)) continue
+            placed.push({ x: cx, y: cy, r })
+            const dark = rand() < 0.5
+            const body: RGB = dark ? [104, 74, 48] : [150, 116, 78]
+            stone(data, rand, cx, cy, r, body, [64, 44, 28], dark ? [140, 106, 72] : [186, 152, 110])
+            break
+        }
     }
     return data
 }
@@ -260,8 +395,8 @@ function renderAsphalt(rand: () => number): Uint8Array {
         }
     }
     for (let k = 0; k < 220; k++) {
-        const dx = Math.floor(rand() * TILE)
-        const dy = Math.floor(rand() * TILE)
+        const dx = RIM + Math.floor(rand() * (TILE - 2 * RIM))
+        const dy = RIM + Math.floor(rand() * (TILE - 2 * RIM))
         const d = 18 + Math.floor(rand() * 10)
         const i = (dy * TILE + dx) * 4
         data[i] = clamp255((data[i] ?? 0) + d)
@@ -273,14 +408,15 @@ function renderAsphalt(rand: () => number): Uint8Array {
 
 function renderRecipe(recipe: string, seed: number): RgbaImage {
     const data = renderVariant(recipe, mulberry32(seed))
-    // Общая кромка: край одинаков у всех вариантов рецепта и сшивается
-    // с любым из них, вариативность живёт внутри (см. applySharedRim).
-    if (seed !== EDGE_SEED) applySharedRim(data, renderVariant(recipe, mulberry32(EDGE_SEED)))
+    // Перьевая рамка: внешний край — чистый EDGE_SEED (стык между тайлами
+    // попиксельно совпадает), внутрь вес сходит на нет. В зоне бленда только
+    // фоновый шум — дискрет живёт строго в интерьере, кольца нет.
+    if (seed !== EDGE_SEED) featherSharedRim(data, renderVariant(recipe, mulberry32(EDGE_SEED)))
     return { w: TILE, h: TILE, data }
 }
 
 // Кромка, общая для всех вариантов рецепта: тот же рецепт с фиксированным
-// seed. Ширина меньше половины тайла, вес — smoothstep от 1 у края к 0 внутрь.
+// seed. Дискретный шум живёт строго внутри, рамка копируется попиксельно.
 const EDGE_SEED = 0
 const RIM = 12
 
@@ -294,7 +430,7 @@ function renderVariant(recipe: string, rand: () => number): Uint8Array {
     fail(`неизвестный рецепт: ${recipe} (известные: ${ALL_RECIPES.join(', ')})`)
 }
 
-function applySharedRim(data: Uint8Array, edge: Uint8Array): void {
+function featherSharedRim(data: Uint8Array, edge: Uint8Array): void {
     for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
             const d = Math.min(x, y, TILE - 1 - x, TILE - 1 - y)
