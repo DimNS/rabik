@@ -1,6 +1,7 @@
 import { type Dir, tryMove } from './core/game-rules.ts'
-import { createGameState } from './core/game-state.ts'
+import { createGameState, type GameState } from './core/game-state.ts'
 import { loadLevel, loadManifest } from './data/levels-loader.ts'
+import { loadDone, markDone } from './data/progress.ts'
 import { attachKeyboard } from './input/keyboard.ts'
 import { attachPointer } from './input/pointer.ts'
 import { createGameLoop } from './loop/game-loop.ts'
@@ -9,6 +10,7 @@ import { computeLayout, type Layout, readDpr } from './view/layout.ts'
 import { createRenderer } from './view/renderer.ts'
 import { createSpriteAnimator } from './view/sprite-anim.ts'
 import { loadAnimationAtlas, loadAtlas } from './view/sprite-atlas.ts'
+import { createUi, type ModalKind, nextLevelId, type Ui } from './view/ui.ts'
 
 const TILES_JSON = 'public/assets/sprites/tiles.json'
 const RABBIT_JSON = 'public/assets/sprites/rabbit.json'
@@ -36,10 +38,7 @@ async function bootstrap(): Promise<void> {
         loadAnimationAtlas(RABBIT_JSON),
         loadManifest(),
     ])
-    const entry = manifest.levels[0]
-    if (!entry) throw new Error('манифест: нет ни одного уровня')
-    const level = await loadLevel(entry.file, entry.id)
-    const state = createGameState(level)
+    if (manifest.levels.length === 0) throw new Error('манифест: нет ни одного уровня')
 
     const rabbitFrames: [name: string, duration: number][] = []
     for (const [name, frame] of Object.entries(rabbit.frames)) {
@@ -54,7 +53,7 @@ async function bootstrap(): Promise<void> {
         rabbitFrames.map(([, duration]) => duration),
     )
 
-    let layout: Layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
+    let layout: Layout = computeLayout(canvas.clientWidth || 300, canvas.clientHeight || 300, 1, 1, readDpr())
     let facing: Dir = 'up'
     const renderer = createRenderer({
         ctx: game.ctx,
@@ -69,35 +68,95 @@ async function bootstrap(): Promise<void> {
     attachKeyboard(queue)
     attachPointer(queue, canvas)
 
-    let announced = false
-    let announcedGameOver = false
+    let state: GameState | null = null
+    let currentId = ''
+    let screen: 'entry' | 'levels' | 'game' = 'entry'
+    let modal: ModalKind = 'none'
+    let ui!: Ui
+
     const loop = createGameLoop(
         (dtMs) => {
             animator.advance(dtMs)
+            if (!state || screen !== 'game' || modal !== 'none') {
+                queue.length = 0
+                return
+            }
             const dir = queue.shift()
             if (dir && tryMove(state, dir)) {
                 facing = dir
                 renderer.redrawTile(state.player.x, state.player.y, state)
             }
-            if (state.solved && !announced) {
-                announced = true
-                console.log('Уровень решён: вся земля замощена')
-            } else if (state.stuck && !announcedGameOver) {
-                announcedGameOver = true
-                console.log('Игра окончена: ходов больше нет')
+            if (state.solved) {
+                markDone(currentId)
+                modal = 'win'
+                ui.showModal('win')
+            } else if (state.stuck) {
+                modal = 'fail'
+                ui.showModal('fail')
             }
         },
-        () => renderer.render(state),
+        () => {
+            if (state) renderer.render(state)
+        },
     )
+
+    async function startLevel(id: string): Promise<void> {
+        const entry = manifest.levels.find((l) => l.id === id)
+        if (!entry) throw new Error(`манифест: уровень "${id}" не найден`)
+        const level = await loadLevel(entry.file, entry.id)
+        state = createGameState(level)
+        currentId = entry.id
+        facing = 'up'
+        screen = 'game'
+        modal = 'none'
+        queue.length = 0
+        layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
+        renderer.renderAll(state)
+        ui.showGame()
+        loop.start()
+    }
+
+    function openLevels(): void {
+        screen = 'levels'
+        modal = 'none'
+        queue.length = 0
+        ui.showLevels(manifest, loadDone())
+    }
+
+    async function goNext(): Promise<void> {
+        const next = nextLevelId(manifest.levels, currentId)
+        if (!next) openLevels()
+        else await startLevel(next).catch(showError)
+    }
+
+    ui = createUi({
+        onPlay: () => openLevels(),
+        onPick: (id) => startLevel(id).catch(showError),
+        onMenu: () => {
+            if (screen !== 'game' || !state) return
+            modal = 'menu'
+            ui.showModal('menu')
+        },
+        onBack: () => openLevels(),
+        onRestart: () => {
+            if (currentId) startLevel(currentId).catch(showError)
+        },
+        onNext: () => void goNext(),
+        onClose: () => {
+            modal = 'none'
+            ui.showModal('none')
+        },
+    })
 
     window.addEventListener('resize', () => {
         game.resize()
-        layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
-        renderer.renderAll(state)
+        if (state) {
+            layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
+            renderer.renderAll(state)
+        }
     })
 
-    renderer.renderAll(state)
-    loop.start()
+    ui.showEntry()
 }
 
 bootstrap().catch(showError)
