@@ -36,6 +36,8 @@ export interface LevelData {
     tiles: string[][]
     grid: CellType[][]
     start: Vec2
+    // Фактический seed генерации (заполняет generateLevel; в файлах уровней отсутствует).
+    seed?: string
 }
 
 export interface LevelManifestItem {

@@ -6,6 +6,10 @@
 <title>Галерея тайлов — raw и атлас</title>
 <style>
 body { font-family: system-ui, sans-serif; background: #141414; color: #eee; margin: 0; padding: 16px; }
+.tools-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+.tools-nav a { padding: 6px 12px; border: 1px solid #444; border-radius: 6px; color: #bbb; text-decoration: none; background: #1e1e1e; }
+.tools-nav a:hover { color: #fff; border-color: #888; }
+.tools-nav a[aria-current="page"] { background: #eee; color: #111; border-color: #eee; }
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .tabs button { padding: 8px 16px; cursor: pointer; background: #222; color: #eee; border: 1px solid #444; border-radius: 6px; }
 .tabs button[aria-selected="true"] { background: #eee; color: #111; }
@@ -20,6 +24,7 @@ code { color: #9ad; }
 </style>
 </head>
 <body>
+<nav class="tools-nav"><a href="./gallery.html" aria-current="page">Галерея тайлов</a><a href="./seams.html">Швы тайлов</a><a href="./level-preview.html">Превью уровня</a></nav>
 <h1>Галерея тайлов</h1>
 <div class="tabs" role="tablist">
 <button id="tab-raw" aria-selected="true">Raw-кадры</button>

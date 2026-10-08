@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Превью уровня — проверка без внедрения</title>
+<style>
+body { font-family: system-ui, sans-serif; background: #141414; color: #eee; margin: 0; padding: 16px; }
+.tools-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+.tools-nav a { padding: 6px 12px; border: 1px solid #444; border-radius: 6px; color: #bbb; text-decoration: none; background: #1e1e1e; }
+.tools-nav a:hover { color: #fff; border-color: #888; }
+.tools-nav a[aria-current="page"] { background: #eee; color: #111; border-color: #eee; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 14px; align-items: end; }
+.controls label { display: flex; flex-direction: column; gap: 4px; }
+button, select, input { padding: 6px 10px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+button { cursor: pointer; }
+button:disabled { opacity: .4; cursor: default; }
+.hint { font-size: 13px; color: #999; margin: 8px 0; }
+#verdict { font-size: 14px; margin: 8px 0; }
+#verdict.ok { color: #8f8; } #verdict.bad { color: #f88; }
+#board { display: grid; gap: 2px; margin-top: 12px; }
+#views { display: flex; gap: 16px; align-items: start; flex-wrap: wrap; }
+#visual { margin-top: 12px; border-radius: 4px; }
+.cell { width: 44px; height: 44px; font-size: 10px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+.wall { background: #333; color: #888; } .soil { background: #6b5b3e; color: #ffe; }
+.road { background: #3a6b4f; color: #fff; } .step { outline: 3px solid #fd0; } .done { background: #2c4d38; }
+#stepper { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+code { color: #9ad; }
+</style>
+</head>
+<body>
+<nav class="tools-nav"><a href="./gallery.html">Галерея тайлов</a><a href="./seams.html">Швы тайлов</a><a href="./level-preview.html" aria-current="page">Превью уровня</a></nav>
+<h1>Превью уровня</h1>
+<p class="hint">Проверка в памяти: файл и seed никуда не записываются, игра/манифест/прогресс не трогаются. Открыть через <code>bunx serve .</code> из корня.</p>
+<div class="controls">
+<label>Файл уровня <input type="file" id="file" accept=".json,application/json" /></label>
+<button id="load001">Загрузить 001</button>
+<label>Сложность <select id="diff"><option>easy</option><option selected>normal</option><option>hard</option></select></label>
+<label>Seed <input id="seed" value="demo" size="10" /></label>
+<button id="gen">Сгенерировать</button>
+<button id="save" disabled>Сохранить JSON</button>
+</div>
+<p class="hint" id="status"></p>
+<p id="verdict"></p>
+<div id="stepper" hidden>
+<button id="prev">◀</button>
+<input type="range" id="slider" min="0" value="0" />
+<button id="next">▶</button>
+<button id="play">▶▶</button>
+<span id="stepLabel"></span>
+</div>
+<div id="views"><div id="board"></div><canvas id="visual" title="Визуал тайлами игры"></canvas></div>
+<script type="module">
+// Порт src/core/level-types, src/data/levels-loader, src/gen/{rng,solver,generator}.
+// Дублирование намеренно: tools обязаны оставаться статикой без сборки.
+const WALL = new Set(['101','201','301','302','303','304','305','306','307','308','309','310','311','312','313','314','401','402','403','404','405','406','407','408','409','410','411','412','413','414','415','501','502','503','504','505','506','507','508','509','510','511','512','513','514','515','516']);
+const SOIL = new Set(['101','102','103','201','301','302']);
+const ROAD = new Set(['101','102']);
+function frameType(f) {
+  const t = { w: WALL, s: SOIL, r: ROAD }[f[0]];
+  return t?.has(f.slice(1)) ? { w: 'wall', s: 'soil', r: 'road' }[f[0]] : undefined;
+}
+function parseLevel(d) {
+  if (typeof d !== 'object' || !d || Array.isArray(d)) throw new Error('уровень: данные должны быть объектом');
+  const { id, width, height, tiles, start } = d;
+  if (typeof id !== 'string' || !id) throw new Error('уровень: id должен быть непустой строкой');
+  if (!Number.isInteger(width) || width <= 0) throw new Error(`уровень "${id}": width должен быть положительным целым числом`);
+  if (!Number.isInteger(height) || height <= 0) throw new Error(`уровень "${id}": height должен быть положительным целым числом`);
+  if (!Array.isArray(tiles) || tiles.length !== height) throw new Error(`уровень "${id}": высота массива (${tiles?.length}) не совпадает с height (${height})`);
+  const grid = tiles.map((row, y) => {
+    if (!Array.isArray(row) || row.length !== width) throw new Error(`уровень "${id}": длина строки ${y} не совпадает с width (${width})`);
+    return row.map((c) => {
+      const t = typeof c === 'string' && /^[wsr]\d+$/.test(c) ? frameType(c) : undefined;
+      if (!t) throw new Error(`уровень "${id}": неизвестный кадр "${String(c)}" в строке ${y}`);
+      return t;
+    });
+  });
+  tiles.forEach((row, y) => row.forEach((f, x) => {
+    if (f === 's301' && row[x + 1] !== 's302') throw new Error(`уровень "${id}": кадр "s301" (${x}, ${y}) должен стоять слева от "s302"`);
+    if (f === 's302' && row[x - 1] !== 's301') throw new Error(`уровень "${id}": кадр "s302" (${x}, ${y}) должен стоять справа от "s301"`);
+  }));
+  if (typeof start?.x !== 'number' || typeof start?.y !== 'number' || !Number.isInteger(start.x) || !Number.isInteger(start.y)) throw new Error(`уровень "${id}": старт должен содержать целые x и y`);
+  if (start.x < 0 || start.y < 0 || start.x >= width || start.y >= height) throw new Error(`уровень "${id}": старт (${start.x}, ${start.y}) вне сетки`);
+  if (grid[start.y][start.x] !== 'road') throw new Error(`уровень "${id}": стартовая клетка должна иметь тип road`);
+  if ('tileSeed' in d) throw new Error(`уровень "${id}": поле tileSeed запрещено`);
+  return { id, width, height, tiles, grid, start: { x: start.x, y: start.y }, seed: typeof d.seed === 'string' ? d.seed : undefined };
+}
+function hashSeed(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function createRng(seed) { return mulberry32(seed === undefined ? (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0) : hashSeed(seed)); }
+function randomSeed() { return (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0).toString(16).padStart(8, '0'); }
+const PRESETS = { easy: { w: 7, h: 12, cover: 0.35 }, normal: { w: 8, h: 13, cover: 0.5 }, hard: { w: 8, h: 15, cover: 0.6 } };
+const STEPS = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+function shuffled(items, rng) { const o = [...items]; for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; }
+function soilNeighbours(grid, visited, w, h, from) {
+  const out = [];
+  for (const s of STEPS) { const x = from.x + s.x, y = from.y + s.y; if (x < 0 || y < 0 || x >= w || y >= h || grid[y][x] !== 'soil' || visited[y][x]) continue; out.push({ x, y }); }
+  if (out.length > 1) { const deg = (p) => STEPS.reduce((n, s) => { const x = p.x + s.x, y = p.y + s.y; return n + (x >= 0 && y >= 0 && x < w && y < h && grid[y][x] === 'soil' && !visited[y][x] ? 1 : 0); }, 0); out.sort((a, b) => deg(b) - deg(a)); }
+  return out;
+}
+function solveLevel(level, max = 500000) {
+  const { grid, width, height, start } = level;
+  let rem = grid.flat().filter((c) => c === 'soil').length;
+  if (!rem) return [{ ...start }];
+  const vis = grid.map((r) => r.map(() => false));
+  vis[start.y][start.x] = true;
+  const path = [{ ...start }], stack = [soilNeighbours(grid, vis, width, height, start)];
+  let n = 0;
+  while (stack.length) {
+    if (++n > max) return null;
+    const top = stack[stack.length - 1], next = top.pop();
+    if (!next) { stack.pop(); const l = path.pop(); if (l) { vis[l.y][l.x] = false; rem++; } continue; }
+    if (vis[next.y][next.x]) continue;
+    vis[next.y][next.x] = true; path.push(next); rem--;
+    if (!rem) return path.map((p) => ({ ...p }));
+    stack.push(soilNeighbours(grid, vis, width, height, next));
+  }
+  return null;
+}
+function isWall(g, x, y) { return y < 0 || x < 0 || y >= g.length || x >= g[y].length || g[y][x] === 'wall'; }
+function pickWall(g, x, y) {
+  const n = isWall(g, x, y - 1), e = isWall(g, x + 1, y), s = isWall(g, x, y + 1), w = isWall(g, x - 1, y);
+  if (n && e && s && w) {
+    const ne = isWall(g, x + 1, y - 1), se = isWall(g, x + 1, y + 1), sw = isWall(g, x - 1, y + 1), nw = isWall(g, x - 1, y - 1);
+    if (ne && se && sw && nw) return 'w101';
+    if (!ne && !se && sw && nw) return 'w406';
+    if (ne && se && sw && !nw) return 'w405';
+    if (ne && se && !sw && nw) return 'w407';
+    if (ne && !se && !sw && nw) return 'w408';
+    return 'w405';
+  }
+  if (!n && !e && !s && !w) return 'w201';
+  const c = n + e + s + w;
+  if (c === 2) { if (s && e) return 'w403'; if (s && w) return 'w404'; if (n && e) return 'w402'; if (n && w) return 'w401'; return 'w308'; }
+  if (c === 1) return e ? 'w309' : 'w201';
+  if (!s) return 'w307'; if (!n) return 'w310'; if (!e) return 'w305'; return 'w304';
+}
+function findWalk(w, h, start, target, rng) {
+  const vis = Array.from({ length: h }, () => Array(w).fill(false));
+  vis[start.y][start.x] = true;
+  const path = [{ ...start }];
+  const free = (p) => shuffled(STEPS.map((s) => ({ x: p.x + s.x, y: p.y + s.y })).filter((q) => q.x >= 0 && q.y >= 0 && q.x < w && q.y < h && !vis[q.y][q.x]), rng);
+  const stack = [free(start)];
+  let it = 0;
+  while (stack.length) {
+    if (path.length >= target) return path.map((p) => ({ ...p }));
+    if (++it > 50000) return null;
+    const top = stack[stack.length - 1], next = top.pop();
+    if (!next) { stack.pop(); const l = path.pop(); if (l) vis[l.y][l.x] = false; continue; }
+    if (vis[next.y][next.x]) continue;
+    vis[next.y][next.x] = true; path.push(next); stack.push(free(next));
+  }
+  return null;
+}
+function cropWalls(g, start) {
+  let minX = g[0].length, minY = g.length, maxX = 0, maxY = 0;
+  for (let y = 0; y < g.length; y++) for (let x = 0; x < g[y].length; x++) {
+    if (g[y][x] === 'wall') continue;
+    if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+  }
+  const x0 = Math.max(0, minX - 1), y0 = Math.max(0, minY - 1);
+  const x1 = Math.min(g[0].length - 1, maxX + 1), y1 = Math.min(g.length - 1, maxY + 1);
+  return { grid: g.slice(y0, y1 + 1).map((r) => r.slice(x0, x1 + 1)), start: { x: start.x - x0, y: start.y - y0 }, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+}
+function generateLevel({ difficulty, seed, id }) {
+  const p = PRESETS[difficulty];
+  if (!p) throw new Error(`неизвестная сложность "${difficulty}"`);
+  const eff = seed ?? randomSeed();
+  const rng = createRng(eff);
+  for (let a = 0; a < 10; a++) {
+    const j = () => Math.floor(rng() * 3) - 1;
+    let w = Math.min(8, Math.max(5, p.w + j())), h = Math.min(15, Math.max(5, p.h + j()));
+    let start = { x: Math.floor(rng() * w), y: Math.floor(rng() * h) };
+    const walk = findWalk(w, h, start, Math.min(w * h - 1, Math.max(4, Math.round(w * h * p.cover))) + 1, rng);
+    if (!walk || walk.length < 2) continue;
+    const grid = Array.from({ length: h }, () => Array(w).fill('wall'));
+    for (const q of walk) grid[q.y][q.x] = 'soil';
+    grid[start.y][start.x] = 'road';
+    const c = cropWalls(grid, start);
+    const g = c.grid; start = c.start; w = c.width; h = c.height;
+    const pair = new Set();
+    for (let y = 0; y < h; y++) for (let x = 0; x + 1 < w; x++) {
+      if (g[y][x] !== 'soil' || g[y][x + 1] !== 'soil' || pair.has(`${x - 1},${y}`)) continue;
+      if (rng() < 0.18) pair.add(`${x},${y}`);
+    }
+    const tiles = g.map((row, y) => row.map((cell, x) => {
+      if (cell === 'road') return 'r101';
+      if (cell === 'soil') {
+        if (pair.has(`${x},${y}`)) return 's301';
+        if (pair.has(`${x - 1},${y}`)) return 's302';
+        const hh = ((x * 73856093) ^ (y * 19349663) ^ (x * y * 83492791)) >>> 0, r = hh % 10;
+        return r < 7 ? 's101' : r < 9 ? 's102' : 's103';
+      }
+      return pickWall(g, x, y);
+    }));
+    const level = { id: id ?? `gen-${difficulty}-${eff}`, width: w, height: h, tiles, grid: g, start: { ...start }, seed: eff };
+    if (solveLevel(level)) return level;
+  }
+  throw new Error(`не удалось сгенерировать "${difficulty}" за 10 попыток`);
+}
+
+const $ = (id) => document.getElementById(id);
+const status = $('status'), verdict = $('verdict'), board = $('board'), visual = $('visual');
+const stepper = $('stepper'), slider = $('slider'), stepLabel = $('stepLabel');
+let route = null, level = null, timer = null, lastStep = -1;
+const TS = 44;
+let atlasImg = null, atlasFrames = null;
+async function loadTiles() {
+  try {
+    const r = await fetch('../public/assets/sprites/tiles.json');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    atlasFrames = j.frames;
+    atlasImg = new Image();
+    await new Promise((res, rej) => { atlasImg.onload = res; atlasImg.onerror = rej; atlasImg.src = '../public/assets/sprites/' + (j.meta?.image ?? 'tiles.jpg'); });
+    if (level) drawVisual(lastStep);
+  } catch (err) { visual.style.display = 'none'; }
+}
+function drawVisual(step) {
+  if (!level || !atlasImg || !atlasFrames) return;
+  visual.width = level.width * TS; visual.height = level.height * TS;
+  const ctx = visual.getContext('2d');
+  const inRoute = new Set((route ?? []).slice(0, step + 1).map((p) => `${p.x},${p.y}`));
+  const cur = route?.[step];
+  level.tiles.forEach((row, y) => row.forEach((f, x) => {
+    const fr = atlasFrames[f]?.frame;
+    if (fr) ctx.drawImage(atlasImg, fr.x, fr.y, fr.w, fr.h, x * TS, y * TS, TS, TS);
+    else { ctx.fillStyle = '#f0f'; ctx.fillRect(x * TS, y * TS, TS, TS); }
+    if (cur?.x === x && cur?.y === y) { ctx.strokeStyle = '#fd0'; ctx.lineWidth = 3; ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3); }
+    else if (inRoute.has(`${x},${y}`)) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x * TS, y * TS, TS, TS); }
+  }));
+}
+function say(t) { status.textContent = t; }
+function show(lvl, r) {
+  level = lvl; route = r;
+  $('save').disabled = false;
+  const soil = lvl.grid.flat().filter((c) => c === 'soil').length;
+  if (r) {
+    verdict.className = ''; verdict.id = 'verdict';
+    verdict.textContent = `Валиден: ${lvl.id} ${lvl.width}×${lvl.height}, soil ${soil}, seed ${lvl.seed ?? '—'}. Решаем, ходов ${r.length - 1}.`;
+    verdict.className = 'ok';
+    stepper.hidden = false; slider.max = r.length - 1; slider.value = r.length - 1;
+    draw(r.length - 1);
+  } else {
+    verdict.textContent = `Валиден: ${lvl.id} ${lvl.width}×${lvl.height}, soil ${soil}, seed ${lvl.seed ?? '—'}. Нерешаем — прогон недоступен.`;
+    verdict.className = 'bad';
+    stepper.hidden = true; draw(-1);
+  }
+}
+function failShow(e) {
+  level = null; route = null; stepper.hidden = true;
+  $('save').disabled = true;
+  verdict.textContent = 'Невалиден: ' + (e instanceof Error ? e.message : String(e));
+  verdict.className = 'bad'; board.textContent = ''; board.style.gridTemplateColumns = '';
+}
+function draw(step) {
+  if (!level) return;
+  const inRoute = new Set((route ?? []).slice(0, step + 1).map((p) => `${p.x},${p.y}`));
+  const cur = route?.[step];
+  board.style.gridTemplateColumns = `repeat(${level.width}, 44px)`;
+  board.textContent = '';
+  level.tiles.forEach((row, y) => row.forEach((f, x) => {
+    const d = document.createElement('div');
+    const t = level.grid[y][x];
+    d.className = 'cell ' + (cur?.x === x && cur?.y === y ? 'step ' : '') + (inRoute.has(`${x},${y}`) ? 'done ' : '') + t;
+    d.textContent = f;
+    d.title = `${x},${y} ${f}`;
+    board.append(d);
+  }));
+  stepLabel.textContent = route ? `шаг ${step} / ${route.length - 1}` : '';
+  lastStep = step;
+  drawVisual(step);
+}
+function check(raw) {
+  const lvl = parseLevel(raw);
+  show(lvl, solveLevel(lvl));
+  say(`Проверено в памяти: ${lvl.id}.`);
+}
+$('file').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { check(JSON.parse(await f.text())); } catch (err) { failShow(err); }
+});
+$('load001').onclick = async () => {
+  try {
+    const r = await fetch('../public/data/levels/level-001.json');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    check(await r.json());
+  } catch (err) { failShow(err); }
+};
+$('gen').onclick = () => {
+  try {
+    const difficulty = $('diff').value, seed = $('seed').value || undefined;
+    const lvl = generateLevel({ difficulty, seed });
+    check({ id: lvl.id, width: lvl.width, height: lvl.height, tiles: lvl.tiles, start: lvl.start, seed: lvl.seed });
+  } catch (err) { failShow(err); }
+};
+$('save').onclick = () => {
+  if (!level) return;
+  const raw = { id: level.id, width: level.width, height: level.height, tiles: level.tiles, start: level.start };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([`${JSON.stringify(raw, null, 2)}\n`], { type: 'application/json' }));
+  a.download = `${level.id}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say(`Сохранён ${level.id}. Для повтора той же генерации: seed ${level.seed ?? '—'}.`);
+};
+slider.oninput = () => { stop(); draw(Number(slider.value)); };
+$('prev').onclick = () => { stop(); slider.value = Math.max(0, Number(slider.value) - 1); draw(Number(slider.value)); };
+$('next').onclick = () => { stop(); slider.value = Math.min(Number(slider.max), Number(slider.value) + 1); draw(Number(slider.value)); };
+function stop() { if (timer) { clearInterval(timer); timer = null; } }
+$('play').onclick = () => {
+  if (timer) { stop(); return; }
+  slider.value = 0; draw(0);
+  timer = setInterval(() => {
+    const v = Number(slider.value) + 1;
+    if (v > Number(slider.max)) { stop(); return; }
+    slider.value = v; draw(v);
+  }, 300);
+};
+window.__preview = { check, generateLevel, solveLevel, parseLevel };
+loadTiles();
+</script>
+</body>
+</html>

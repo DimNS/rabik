@@ -6,6 +6,10 @@
 <title>Швы тайлов — стыковка вариантов</title>
 <style>
 body { font-family: system-ui, sans-serif; background: #141414; color: #eee; margin: 0; padding: 16px; }
+.tools-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; font-size: 13px; }
+.tools-nav a { padding: 6px 12px; border: 1px solid #444; border-radius: 6px; color: #bbb; text-decoration: none; background: #1e1e1e; }
+.tools-nav a:hover { color: #fff; border-color: #888; }
+.tools-nav a[aria-current="page"] { background: #eee; color: #111; border-color: #eee; }
 .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #bbb; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(410px, 1fr)); gap: 12px; margin-bottom: 24px; }
 .card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 8px; text-align: center; margin: 0; }
@@ -17,6 +21,7 @@ code { color: #9ad; }
 </style>
 </head>
 <body>
+<nav class="tools-nav"><a href="./gallery.html">Галерея тайлов</a><a href="./seams.html" aria-current="page">Швы тайлов</a><a href="./level-preview.html">Превью уровня</a></nav>
 <h1>Швы тайлов</h1>
 <div class="controls">
 <label>tiles.json <input type="file" id="atlasFile" accept=".json,application/json" /></label>
