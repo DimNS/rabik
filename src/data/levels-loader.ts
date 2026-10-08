@@ -1,12 +1,13 @@
 import {
-    CELL_TYPES,
     type CellType,
+    frameType,
     type LevelData,
     type LevelManifest,
     type LevelManifestItem,
 } from '../core/level-types.ts'
 
 export const LEVELS_INDEX = 'public/data/levels/index.json'
+export const FRAME_PATTERN = /^[wsr]\d+$/
 
 function fail(message: string): never {
     throw new Error(message)
@@ -14,19 +15,6 @@ function fail(message: string): never {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isCellType(value: unknown): value is CellType {
-    return CELL_TYPES.some((type) => type === value)
-}
-
-export function hashLevelId(id: string): number {
-    let hash = 0x811c9dc5
-    for (let i = 0; i < id.length; i++) {
-        hash ^= id.charCodeAt(i)
-        hash = Math.imul(hash, 0x01000193)
-    }
-    return hash >>> 0
 }
 
 export function parseLevel(data: unknown): LevelData {
@@ -40,23 +28,40 @@ export function parseLevel(data: unknown): LevelData {
     if (typeof height !== 'number' || !Number.isInteger(height) || height <= 0) {
         fail(`уровень "${id}": height должен быть положительным целым числом`)
     }
-    if (!Array.isArray(tiles)) fail(`уровень "${id}": tiles должен быть массивом строк клеток`)
+    if (!Array.isArray(tiles)) fail(`уровень "${id}": tiles должен быть массивом кадров`)
     if (tiles.length !== height) {
         fail(`уровень "${id}": высота массива клеток (${tiles.length}) не совпадает с height (${height})`)
     }
 
+    const frames: string[][] = []
     const grid: CellType[][] = []
     for (const [y, row] of tiles.entries()) {
         if (!Array.isArray(row)) fail(`уровень "${id}": строка ${y} должна быть массивом клеток`)
         if (row.length !== width) {
             fail(`уровень "${id}": длина строки ${y} (${row.length}) не совпадает с width (${width})`)
         }
-        const cells: CellType[] = []
+        const frameRow: string[] = []
+        const typeRow: CellType[] = []
         for (const cell of row) {
-            if (!isCellType(cell)) fail(`уровень "${id}": неизвестный тип клетки "${String(cell)}" в строке ${y}`)
-            cells.push(cell)
+            const type = typeof cell === 'string' && FRAME_PATTERN.test(cell) ? frameType(cell) : undefined
+            if (type === undefined) fail(`уровень "${id}": неизвестный кадр "${String(cell)}" в строке ${y}`)
+            frameRow.push(cell as string)
+            typeRow.push(type)
         }
-        grid.push(cells)
+        frames.push(frameRow)
+        grid.push(typeRow)
+    }
+
+    // Пара s301+s302 — неделимый горизонтальный блок строго в этом порядке.
+    for (const [y, row] of frames.entries()) {
+        for (const [x, frame] of row.entries()) {
+            if (frame === 's301' && row[x + 1] !== 's302') {
+                fail(`уровень "${id}": кадр "s301" (${x}, ${y}) должен стоять слева от "s302"`)
+            }
+            if (frame === 's302' && row[x - 1] !== 's301') {
+                fail(`уровень "${id}": кадр "s302" (${x}, ${y}) должен стоять справа от "s301"`)
+            }
+        }
     }
 
     if (start === undefined) fail(`уровень "${id}": не объявлена стартовая позиция`)
@@ -72,17 +77,11 @@ export function parseLevel(data: unknown): LevelData {
         fail(`уровень "${id}": стартовая клетка (${x}, ${y}) должна иметь тип road`)
     }
 
-    let seed: number
-    if (tileSeed === undefined) {
-        seed = hashLevelId(id)
-    } else {
-        if (typeof tileSeed !== 'number' || !Number.isInteger(tileSeed) || tileSeed < 0) {
-            fail(`уровень "${id}": tileSeed должен быть целым неотрицательным числом`)
-        }
-        seed = tileSeed
+    if (tileSeed !== undefined) {
+        fail(`уровень "${id}": поле tileSeed запрещено — раскладка кадров статична`)
     }
 
-    return { id, width, height, tiles: grid, start: { x, y }, tileSeed: seed }
+    return { id, width, height, tiles: frames, grid, start: { x, y } }
 }
 
 export function parseManifest(data: unknown): LevelManifest {

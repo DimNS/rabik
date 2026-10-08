@@ -45,16 +45,15 @@ src/
 public/
   data/levels/   уровни (level-*.json) и манифест index.json
   assets/sprites/ атласы tiles.* и rabbit.*
-scripts/   генераторы: gen-tile-variants.ts (JPG-кандидаты 130×130),
-           gen-atlas.ts (сборка атласов)
-tools/     gallery.html — оффлайн-галерея кандидатов и атласа
+scripts/   генераторы: gen-atlas.ts (сборка атласов из public/assets/raw/)
+tools/     gallery.html — оффлайн-галерея raw-кадров и атласа
 openspec/  спеки и история изменений
 ```
 
 ## Уровни
 
-Уровень — JSON: `id`, `width`/`height`, матрица `tiles` из `wall`/`soil`/`road`, стартовая клетка `start` (обязана быть `road`). Список уровней — в `public/data/levels/index.json` (`id` записи обязан совпадать с `id` файла). Необязательное поле `tileSeed` задаёт раскладку вариантов тайлов; без него seed вычисляется из `id`.
+Уровень — JSON: `id`, `width`/`height`, матрица `tiles` из явных кадров (`w403`, `s301`, `r101`, …; префикс `w`/`s`/`r` задаёт тип `wall`/`soil`/`road`), стартовая клетка `start` (обязана быть кадром `r*`). Список уровней — в `public/data/levels/index.json` (`id` записи обязан совпадать с `id` файла). Инструкция маппинга кадров — в спеках `tile-mapping`.
 
 ## Спрайты
 
-Тайлы — квадрат 130px, варианты кадров `wall_N`/`soil_N`/`road_N` выбираются детерминированно по `(x, y, tileSeed)`. Кролик — стрип 1170×130 (9 кадров 130×130, `rabbit_0…rabbit_8`), анимация зациклена по времени и не сбрасывается на ходах. Пересборка: `make candidates` → отбор в галерее → `make atlas`. Рендер с `imageSmoothingEnabled = false` и `image-rendering: pixelated`, поле занимает всё окно.
+Тайлы — квадрат 130px, кадры именованные (`w307`, `s101`, `r102`, …) берутся из данных уровня напрямую; ход на `s201` меняет кадр на `r102`. Кролик — стрип 1170×130 (9 кадров 130×130, `rabbit_0…rabbit_8`), анимация зациклена по времени и не сбрасывается на ходах. Пересборка: `make atlas`. Рендер с `imageSmoothingEnabled = false` и `image-rendering: pixelated`, поле занимает всё окно.

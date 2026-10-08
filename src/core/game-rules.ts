@@ -29,8 +29,11 @@ export function tryMove(state: GameState, dir: Dir): boolean {
     const next = canMove(state, dir)
     if (!next) return false
     const row = state.grid[next.y]
-    if (!row) return false
+    const frameRow = state.frames[next.y]
+    if (!row || !frameRow) return false
     row[next.x] = 'road'
+    // Единственная динамика кадров: обычный шаг — r101, клетка-люк s201 — r102.
+    frameRow[next.x] = frameRow[next.x] === 's201' ? 'r102' : 'r101'
     state.player = next
     state.soilCount--
     if (state.soilCount === 0) state.solved = true

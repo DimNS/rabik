@@ -74,10 +74,14 @@ function describeAtlas(frames: Record<string, AtlasFrame>, meta: AtlasMeta, tile
 export function parseAtlas(data: unknown): AtlasDescription {
     const { frames, meta } = parseFramesAndMeta(data)
 
-    const wall = frames.wall
-    if (!wall) fail('атлас: отсутствует кадр "wall" — источник размера тайла')
+    // Размер тайла — из любого кадра статики (все кадры 130×130, именованные: w307, s101, …).
+    const names = Object.keys(frames)
+    const firstName = names[0]
+    if (firstName === undefined) fail('атлас: нет ни одного кадра статики')
+    const first = frames[firstName]
+    if (first === undefined) fail('атлас: нет ни одного кадра статики')
 
-    return describeAtlas(frames, meta, wall.frame.w)
+    return describeAtlas(frames, meta, first.frame.w)
 }
 
 export function parseAnimationAtlas(data: unknown): AtlasDescription {

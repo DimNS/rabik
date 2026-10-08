@@ -55,17 +55,16 @@ function near(actual: [number, number, number], expected: [number, number, numbe
 }
 
 describe('gen-atlas: мульти-вариантная сборка', () => {
-    test('фикстура 2+1+3: порядок по именам, алиасы, размеры JPG', async () => {
+    test('фикстура 2+1+2: порядок по именам, именованные кадры, размеры JPG', async () => {
         const rawDir = makeRaw({
             wall: [
-                ['b.jpg', solidJpg(30, 200, 30)],
-                ['a.jpg', solidJpg(200, 30, 30)],
+                ['307.jpg', solidJpg(200, 30, 30)],
+                ['306.jpg', solidJpg(30, 200, 30)],
             ],
-            soil: [['m.jpg', solidJpg(30, 30, 200)]],
+            soil: [['101.jpg', solidJpg(30, 30, 200)]],
             road: [
-                ['z.jpg', solidJpg(30, 200, 200)],
-                ['c.jpg', solidJpg(200, 30, 200)],
-                ['a.jpg', solidJpg(200, 200, 30)],
+                ['102.jpg', solidJpg(30, 200, 200)],
+                ['101.jpg', solidJpg(200, 200, 30)],
             ],
         })
         // Посторонние файлы с не-.jpg расширениями игнорируются.
@@ -80,29 +79,29 @@ describe('gen-atlas: мульти-вариантная сборка', () => {
             meta: { image: string; size: { w: number; h: number } }
         }
         expect(json.meta.image).toBe('tiles.jpg')
-        expect(json.meta.size).toEqual({ w: 3 * TILE, h: 3 * TILE })
+        expect(json.meta.size).toEqual({ w: 2 * TILE, h: 3 * TILE })
         for (const [name, x, y] of [
-            ['wall_0', 0, 0],
-            ['wall_1', TILE, 0],
-            ['soil_0', 0, TILE],
-            ['road_0', 0, 2 * TILE],
-            ['road_1', TILE, 2 * TILE],
-            ['road_2', 2 * TILE, 2 * TILE],
+            ['w306', 0, 0],
+            ['w307', TILE, 0],
+            ['s101', 0, TILE],
+            ['r101', 0, 2 * TILE],
+            ['r102', TILE, 2 * TILE],
         ] as const) {
             expect(json.frames[name]?.frame).toEqual({ x, y, w: TILE, h: TILE })
         }
-        expect(json.frames.wall).toEqual(json.frames.wall_0)
-        expect(json.frames.soil).toEqual(json.frames.soil_0)
-        expect(json.frames.road).toEqual(json.frames.road_0)
-        expect(Object.keys(json.frames)).toHaveLength(9)
+        // Индексных имён и алиасов типов нет.
+        for (const name of Object.keys(json.frames)) {
+            expect(name).not.toMatch(/^(wall|soil|road)(_\d+)?$/)
+        }
+        expect(Object.keys(json.frames)).toHaveLength(5)
 
-        // Порядок — по имени файла: wall_0 — a.jpg (красный), wall_1 — b.jpg (зелёный).
+        // Порядок — по имени файла: w306 — 306.jpg (зелёный), w307 — 307.jpg (красный).
         const imgBytes = new Uint8Array(await Bun.file(join(outDir, 'tiles.jpg')).arrayBuffer())
         const decoded = decodeJpg(imgBytes, 'tiles.jpg')
-        expect(decoded.w).toBe(3 * TILE)
+        expect(decoded.w).toBe(2 * TILE)
         expect(decoded.h).toBe(3 * TILE)
-        expect(near(centerPixel(imgBytes, decoded.w, 0, 0), [200, 30, 30])).toBe(true)
-        expect(near(centerPixel(imgBytes, decoded.w, TILE, 0), [30, 200, 30])).toBe(true)
+        expect(near(centerPixel(imgBytes, decoded.w, 0, 0), [30, 200, 30])).toBe(true)
+        expect(near(centerPixel(imgBytes, decoded.w, TILE, 0), [200, 30, 30])).toBe(true)
         expect(near(centerPixel(imgBytes, decoded.w, 0, TILE), [30, 30, 200])).toBe(true)
         expect(near(centerPixel(imgBytes, decoded.w, 0, 2 * TILE), [200, 200, 30])).toBe(true)
     })

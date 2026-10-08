@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { parseLevel } from '../data/levels-loader.ts'
 import { canMove, type Dir, isStuck, tryMove } from './game-rules.ts'
 import { createEmptyState, createGameState, type GameState } from './game-state.ts'
 import type { CellType, LevelData, Vec2 } from './level-types.ts'
@@ -8,11 +9,15 @@ const LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta
 const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' }
 
 async function loadTestLevel(): Promise<LevelData> {
-    return (await Bun.file(LEVEL_URL).json()) as LevelData
+    return parseLevel(await Bun.file(LEVEL_URL).json())
 }
 
 function cellAt(grid: CellType[][], { x, y }: Vec2): CellType | undefined {
     return grid[y]?.[x]
+}
+
+function frameAt(frames: string[][], { x, y }: Vec2): string | undefined {
+    return frames[y]?.[x]
 }
 
 function dirBetween(from: Vec2, to: Vec2): Dir {
@@ -67,6 +72,7 @@ describe('game-state', () => {
     test('createEmptyState пуст и не решён', () => {
         expect(createEmptyState()).toEqual({
             grid: [],
+            frames: [],
             width: 0,
             height: 0,
             player: { x: 0, y: 0 },
@@ -83,17 +89,28 @@ describe('game-state', () => {
         expect(state.width).toBe(level.width)
         expect(state.height).toBe(level.height)
         expect(state.player).toEqual(level.start)
-        expect(state.soilCount).toBe(countSoilIn(level.tiles))
+        expect(state.soilCount).toBe(countSoilIn(level.grid))
         expect(state.solved).toBe(false)
         expect(cellAt(state.grid, state.player)).toBe('road')
     })
 
-    test('createGameState не разделяет сетку с уровнем', async () => {
+    test('createGameState копирует кадры уровня', async () => {
+        const level = await loadTestLevel()
+        const state = createGameState(level)
+
+        expect(state.frames).toEqual(level.tiles)
+        expect(frameAt(state.frames, state.player)).toBe('r101')
+    })
+
+    test('createGameState не разделяет сетки с уровнем', async () => {
         const level = await loadTestLevel()
         const state = createGameState(level)
         const row = state.grid[1]
         if (row) row[1] = 'soil'
-        expect(cellAt(level.tiles, { x: 1, y: 1 })).toBe('road')
+        const frameRow = state.frames[1]
+        if (frameRow) frameRow[1] = 's101'
+        expect(cellAt(level.grid, { x: 1, y: 1 })).toBe('road')
+        expect(frameAt(level.tiles, { x: 1, y: 1 })).toBe('r101')
     })
 })
 
@@ -108,13 +125,36 @@ describe('tryMove', () => {
         expect(state.player).toEqual(target)
         expect(cellAt(state.grid, target)).toBe('road')
         expect(cellAt(state.grid, from)).toBe('road')
+        expect(frameAt(state.frames, target)).toBe('r101')
         expect(state.soilCount).toBe(countSoilIn(state.grid))
+    })
+
+    test('ход на s201 закрывает люк кадром r102', () => {
+        const level: LevelData = {
+            id: 'hatch',
+            width: 3,
+            height: 1,
+            tiles: [['r101', 's201', 's101']],
+            grid: [['road', 'soil', 'soil']],
+            start: { x: 0, y: 0 },
+        }
+        const state = createGameState(level)
+
+        expect(tryMove(state, 'right')).toBe(true)
+        expect(cellAt(state.grid, { x: 1, y: 0 })).toBe('road')
+        expect(frameAt(state.frames, { x: 1, y: 0 })).toBe('r102')
+        expect(state.soilCount).toBe(1)
+        expect(state.solved).toBe(false)
     })
 
     test('отказ на wall, на road, за границей и на неизвестном направлении ничего не меняет', async () => {
         const state = createGameState(await loadTestLevel())
         const start = { ...state.player }
-        const before = { ...state, grid: state.grid.map((row) => [...row]) }
+        const before = {
+            ...state,
+            grid: state.grid.map((row) => [...row]),
+            frames: state.frames.map((row) => [...row]),
+        }
 
         expect(canMove(state, 'up')).toBeNull()
         expect(canMove(state, 'left')).toBeNull()
@@ -127,6 +167,7 @@ describe('tryMove', () => {
 
         expect(state.player).toEqual(before.player)
         expect(state.grid).toEqual(before.grid)
+        expect(state.frames).toEqual(before.frames)
         expect(state.soilCount).toBe(before.soilCount)
         expect(state.solved).toBe(false)
     })
@@ -142,9 +183,12 @@ describe('tryMove', () => {
 })
 
 describe('тупик (game over)', () => {
-    function makeState(grid: CellType[][], player: Vec2): GameState {
+    const DEFAULT_FRAME: Record<CellType, string> = { wall: 'w101', soil: 's101', road: 'r101' }
+
+    function makeState(grid: CellType[][], player: Vec2, frames?: string[][]): GameState {
         return {
             grid: grid.map((row) => [...row]),
+            frames: frames?.map((row) => [...row]) ?? grid.map((row) => row.map((cell) => DEFAULT_FRAME[cell])),
             width: grid[0]?.length ?? 0,
             height: grid.length,
             player: { ...player },

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { hashLevelId, LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
+import { LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
 
 const REAL_LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta.url)
 const REAL_MANIFEST_URL = new URL('../../public/data/levels/index.json', import.meta.url)
@@ -18,9 +18,9 @@ function validLevel(): LevelJson {
         width: 3,
         height: 3,
         tiles: [
-            ['wall', 'wall', 'wall'],
-            ['wall', 'road', 'soil'],
-            ['wall', 'soil', 'soil'],
+            ['w101', 'w101', 'w101'],
+            ['w101', 'r101', 's101'],
+            ['w101', 's102', 's201'],
         ],
         start: { x: 1, y: 1 },
     }
@@ -35,7 +35,12 @@ describe('parseLevel', () => {
         expect(level.start).toEqual({ x: 1, y: 1 })
         expect(level.tiles.length).toBe(7)
         expect(level.tiles.every((row) => row.length === 7)).toBe(true)
-        expect(level.tiles[1]?.[1]).toBe('road')
+        expect(level.tiles[1]?.[1]).toBe('r101')
+        expect(level.grid[1]?.[1]).toBe('road')
+        expect(level.tiles[0]?.[0]).toBe('w403')
+        // (0,2): стороны замкнуты, открыты диагонали NE+SE — внутренний угол w406, не кромка.
+        expect(level.tiles[2]?.[0]).toBe('w406')
+        expect(level.grid[2]?.[0]).toBe('wall')
     })
 
     test('отклоняет не-объект', () => {
@@ -69,25 +74,49 @@ describe('parseLevel', () => {
             parseLevel({
                 ...validLevel(),
                 tiles: [
-                    ['wall', 'wall'],
-                    ['wall', 'road', 'soil'],
-                    ['wall', 'soil', 'soil'],
+                    ['w101', 'w101'],
+                    ['w101', 'r101', 's101'],
+                    ['w101', 's102', 's201'],
                 ],
             }),
         ).toThrow(/не совпадает с width/)
     })
 
-    test('отклоняет неизвестный тип клетки', () => {
+    test('отклоняет неизвестный кадр и старый тип без номера', () => {
         expect(() =>
             parseLevel({
                 ...validLevel(),
                 tiles: [
-                    ['wall', 'wall', 'wall'],
-                    ['wall', 'lava', 'soil'],
-                    ['wall', 'soil', 'soil'],
+                    ['w101', 'w101', 'w101'],
+                    ['w101', 'lava', 's101'],
+                    ['w101', 's102', 's201'],
                 ],
             }),
-        ).toThrow(/неизвестный тип клетки "lava"/)
+        ).toThrow(/неизвестный кадр "lava"/)
+        for (const old of ['wall', 'soil', 'road', 's999', 'x101']) {
+            expect(() =>
+                parseLevel({
+                    ...validLevel(),
+                    tiles: [
+                        ['w101', 'w101', 'w101'],
+                        ['w101', old, 's101'],
+                        ['w101', 's102', 's201'],
+                    ],
+                }),
+            ).toThrow(/неизвестный кадр/)
+        }
+    })
+
+    test('отклоняет разорванную и перевёрнутую пару s301/s302', () => {
+        const lone = validLevel()
+        lone.tiles[1] = ['w101', 's301', 's101']
+        expect(() => parseLevel(lone)).toThrow(/s301/)
+        const reversed = validLevel()
+        reversed.tiles[1] = ['w101', 's302', 's301']
+        expect(() => parseLevel(reversed)).toThrow(/s302/)
+        const single = validLevel()
+        single.tiles[1] = ['w101', 's302', 's101']
+        expect(() => parseLevel(single)).toThrow(/s302/)
     })
 
     test('отклоняет отсутствующую стартовую позицию', () => {
@@ -107,21 +136,13 @@ describe('parseLevel', () => {
         expect(() => parseLevel({ ...validLevel(), start: { x: 0, y: 0 } })).toThrow(/должна иметь тип road/)
     })
 
-    test('явный tileSeed принимается', () => {
-        expect(parseLevel({ ...validLevel(), tileSeed: 42 }).tileSeed).toBe(42)
-        expect(parseLevel({ ...validLevel(), tileSeed: 0 }).tileSeed).toBe(0)
+    test('поле tileSeed запрещено', () => {
+        expect(() => parseLevel({ ...validLevel(), tileSeed: 42 })).toThrow(/tileSeed/)
+        expect(() => parseLevel({ ...validLevel(), tileSeed: 0 })).toThrow(/tileSeed/)
     })
 
-    test('отсутствующий tileSeed выводится как хэш id', () => {
-        expect(parseLevel(validLevel()).tileSeed).toBe(hashLevelId('t1'))
-        expect(parseLevel({ ...validLevel(), id: 'other' }).tileSeed).toBe(hashLevelId('other'))
-        expect(parseLevel(validLevel()).tileSeed).not.toBe(parseLevel({ ...validLevel(), id: 'other' }).tileSeed)
-    })
-
-    test('отклоняет нецелый, отрицательный и нечисловой tileSeed', () => {
-        expect(() => parseLevel({ ...validLevel(), tileSeed: -1 })).toThrow(/tileSeed/)
-        expect(() => parseLevel({ ...validLevel(), tileSeed: 4.5 })).toThrow(/tileSeed/)
-        expect(() => parseLevel({ ...validLevel(), tileSeed: '42' })).toThrow(/tileSeed/)
+    test('без tileSeed seed не вычисляется', () => {
+        expect(parseLevel(validLevel())).not.toHaveProperty('tileSeed')
     })
 })
 

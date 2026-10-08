@@ -1,6 +1,6 @@
 import { type Dir, tryMove } from './core/game-rules.ts'
 import { createGameState } from './core/game-state.ts'
-import { hashLevelId, loadLevel, loadManifest } from './data/levels-loader.ts'
+import { loadLevel, loadManifest } from './data/levels-loader.ts'
 import { attachKeyboard } from './input/keyboard.ts'
 import { attachPointer } from './input/pointer.ts'
 import { createGameLoop } from './loop/game-loop.ts'
@@ -63,7 +63,6 @@ async function bootstrap(): Promise<void> {
         animator,
         getLayout: () => layout,
         getFacing: () => facing,
-        tileSeed: level.tileSeed ?? hashLevelId(level.id),
     })
 
     const queue: Dir[] = []

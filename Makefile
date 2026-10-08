@@ -1,4 +1,4 @@
-.PHONY: install ai-check check test dev build candidates atlas
+.PHONY: install ai-check check test dev build atlas
 
 install:
 	@bun install
@@ -18,9 +18,6 @@ dev: build
 
 build:
 	@bun run build
-
-candidates:
-	@bun scripts/gen-tile-variants.ts
 
 atlas:
 	@bun scripts/gen-atlas.ts

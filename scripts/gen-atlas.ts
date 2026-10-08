@@ -172,6 +172,7 @@ if (combinedName !== undefined) {
 } else {
     if (variants !== undefined) {
         // Три ряда (ряд на тип), ширина по максимуму вариантов.
+        // Имя кадра — буква типа + имя файла без расширения: wall/307.jpg → w307.
         const maxCount = Math.max(...variants.map((list) => list.length))
         const pngW = maxCount * TILE
         const pngH = TILE * TILE_NAMES.length
@@ -179,10 +180,11 @@ if (combinedName !== undefined) {
         const frames: Record<string, AtlasFrame> = {}
         TILE_NAMES.forEach((name, t) => {
             const list = variants[t] ?? []
+            const names = variantNames[t] ?? []
             list.forEach((tile, i) => {
-                const frameName = `${name}_${i}`
+                const base = (names[i] ?? `${i}.jpg`).replace(/\.jpg$/, '')
+                const frameName = `${name[0]}${base}`
                 frames[frameName] = { frame: { x: i * TILE, y: t * TILE, w: TILE, h: TILE } }
-                if (i === 0) frames[name] = { frame: { x: 0, y: t * TILE, w: TILE, h: TILE } }
                 blit(tile, 0, 0, TILE, TILE, data, pngW, i * TILE, t * TILE)
             })
         })

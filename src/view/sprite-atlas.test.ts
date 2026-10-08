@@ -13,27 +13,27 @@ async function realRabbit() {
 }
 
 describe('parseAtlas', () => {
-    test('реальные плитки: wall/soil/road, tileSize 130', async () => {
+    test('реальные плитки: 55 именованных кадров, tileSize 130', async () => {
         const atlas = await realTiles()
-        // Мульти-вариантный атлас: набор wall_N/soil_N/road_N зависит от отбора в raw/,
-        // точный список не пиним — проверяем обязательные кадры и алиасы.
+        // Именованный атлас ручных тайлов: w* — 47, s* — 6, r* — 2.
         const names = Object.keys(atlas.frames)
-        for (const name of ['wall', 'soil', 'road', 'wall_0', 'soil_0', 'road_0']) {
-            expect(names).toContain(name)
-        }
-        for (const name of ['wall', 'soil', 'road', 'wall_0', 'soil_0', 'road_0']) {
+        expect(names).toHaveLength(55)
+        expect(names.filter((n) => n.startsWith('w'))).toHaveLength(47)
+        expect(names.filter((n) => n.startsWith('s'))).toHaveLength(6)
+        expect(names.filter((n) => n.startsWith('r'))).toHaveLength(2)
+        for (const name of ['w101', 'w201', 'w307', 'w403', 's101', 's201', 's301', 's302', 'r101', 'r102']) {
             expect(atlas.getFrame(name)).toBeDefined()
         }
-        // Алиасы указывают на нулевой вариант.
-        for (const name of ['wall', 'soil', 'road']) {
-            expect(atlas.getFrame(name)).toEqual(atlas.getFrame(`${name}_0`))
+        // Индексных имён и алиасов типов нет.
+        for (const name of names) {
+            expect(name).not.toMatch(/^(wall|soil|road)(_\d+)?$/)
         }
         expect(atlas.meta.image).toBe('tiles.jpg')
     })
 
-    test('tileSize равен ширине кадра wall', async () => {
+    test('tileSize равен ширине любого кадра статики', async () => {
         const atlas = await realTiles()
-        expect(atlas.tileSize).toBe(atlas.getFrame('wall').frame.w)
+        expect(atlas.tileSize).toBe(atlas.getFrame('w101').frame.w)
         expect(atlas.tileSize).toBe(130)
     })
 
@@ -65,28 +65,28 @@ describe('parseAtlas', () => {
         expect(() => rabbit.getFrame('rabbit_9')).toThrow(/rabbit_9/)
     })
 
-    test('отклоняет атлас без кадра wall', () => {
+    test('отклоняет атлас без кадров', () => {
         expect(() =>
             parseAtlas({
-                frames: { soil: { frame: { x: 0, y: 0, w: 16, h: 16 } } },
-                meta: { image: 'tiles.png', size: { w: 64, h: 32 } },
+                frames: {},
+                meta: { image: 'tiles.jpg', size: { w: 64, h: 32 } },
             }),
-        ).toThrow(/wall/)
+        ).toThrow(/ни одного кадра/)
     })
 
     test('отклоняет некорректный прямоугольник кадра', () => {
         expect(() =>
             parseAtlas({
-                frames: { wall: { frame: { x: 0, y: 0, w: '16' } } },
-                meta: { image: 'tiles.png', size: { w: 64, h: 32 } },
+                frames: { w101: { frame: { x: 0, y: 0, w: '16' } } },
+                meta: { image: 'tiles.jpg', size: { w: 64, h: 32 } },
             }),
         ).toThrow(/frame/)
         expect(() =>
             parseAtlas({
-                frames: { wall: { frame: { x: 0, y: 0, w: 0, h: 16 } } },
-                meta: { image: 'tiles.png', size: { w: 64, h: 32 } },
+                frames: { w101: { frame: { x: 0, y: 0, w: 0, h: 16 } } },
+                meta: { image: 'tiles.jpg', size: { w: 64, h: 32 } },
             }),
-        ).toThrow(/wall/)
+        ).toThrow(/w101/)
     })
 
     test('отклоняет неположительную duration', () => {
