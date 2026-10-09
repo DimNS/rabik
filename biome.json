@@ -19,6 +19,6 @@
         }
     },
     "files": {
-        "includes": ["src/**", "scripts/**", "index.html"]
+        "includes": ["src/**", "scripts/**", "tools/*.ts", "index.html"]
     }
 }
