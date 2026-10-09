@@ -52,6 +52,10 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     function render(state: GameState): void {
         const layout = getLayout()
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        ctx.restore()
         ctx.drawImage(layer, layout.offsetX, layout.offsetY)
         const { x: sx, y: sy, w, h } = rabbit.getFrame(animator.current()).frame
         const rect = playerRect(state.player.x, state.player.y, layout)
