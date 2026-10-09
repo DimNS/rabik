@@ -103,7 +103,7 @@ async function bootstrap(): Promise<void> {
     async function startLevel(id: string): Promise<void> {
         const entry = manifest.levels.find((l) => l.id === id)
         if (!entry) throw new Error(`манифест: уровень "${id}" не найден`)
-        const level = await loadLevel(entry.file, entry.id)
+        const level = await loadLevel(entry.id)
         state = createGameState(level)
         currentId = entry.id
         facing = 'up'
@@ -112,7 +112,7 @@ async function bootstrap(): Promise<void> {
         queue.length = 0
         layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
         renderer.renderAll(state)
-        ui.showGame()
+        ui.showGame(entry.seed)
         loop.start()
     }
 

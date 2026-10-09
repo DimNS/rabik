@@ -5,7 +5,7 @@ import { solveLevel } from '../src/gen/solver.ts'
 import { loadAtlas, type SpriteAtlas } from '../src/view/sprite-atlas.ts'
 
 const TILES_JSON = '../public/assets/sprites/tiles.json'
-const LEVEL_001_JSON = '../public/data/levels/level-001.json'
+const LEVEL_001_JSON = '../public/data/levels/001.json'
 
 function el(id: string): HTMLElement {
     const node = document.getElementById(id)

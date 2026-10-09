@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
 
-const REAL_LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta.url)
+const REAL_LEVEL_URL = new URL('../../public/data/levels/001.json', import.meta.url)
 const REAL_MANIFEST_URL = new URL('../../public/data/levels/index.json', import.meta.url)
 
 interface LevelJson {
@@ -27,7 +27,7 @@ function validLevel(): LevelJson {
 }
 
 describe('parseLevel', () => {
-    test('принимает реальный уровень level-001.json', async () => {
+    test('принимает реальный уровень 001.json', async () => {
         const level = parseLevel(await Bun.file(REAL_LEVEL_URL).json())
         expect(level.id).toBe('001')
         expect(level.width).toBe(7)
@@ -149,7 +149,19 @@ describe('parseLevel', () => {
 describe('parseManifest', () => {
     test('принимает реальный index.json', async () => {
         const manifest = parseManifest(await Bun.file(REAL_MANIFEST_URL).json())
-        expect(manifest.levels).toEqual([{ id: '001', file: 'level-001.json', name: 'Пробный участок' }])
+        expect(manifest.levels).toEqual([
+            { id: '001', seed: '---' },
+            { id: '002', seed: '2e8201e7' },
+            { id: '003', seed: '72a1718b' },
+            { id: '004', seed: 'ab553aff' },
+            { id: '005', seed: 'b78a7f4a' },
+        ])
+    })
+
+    test('seed необязателен, но обязан быть непустой строкой', () => {
+        expect(parseManifest({ levels: [{ id: 'a' }] })).toEqual({ levels: [{ id: 'a' }] })
+        expect(() => parseManifest({ levels: [{ id: 'a', seed: '' }] })).toThrow(/seed/)
+        expect(() => parseManifest({ levels: [{ id: 'a', seed: 7 }] })).toThrow(/seed/)
     })
 
     test('отклоняет отсутствующий levels и неполные записи', () => {
@@ -157,8 +169,7 @@ describe('parseManifest', () => {
         expect(() => parseManifest({})).toThrow(/levels/)
         expect(() => parseManifest({ levels: ['x'] })).toThrow(/объектом/)
         expect(() => parseManifest({ levels: [{}] })).toThrow(/id/)
-        expect(() => parseManifest({ levels: [{ id: 'a' }] })).toThrow(/file/)
-        expect(() => parseManifest({ levels: [{ id: 'a', file: 'f' }] })).toThrow(/name/)
+        expect(() => parseManifest({ levels: [{ id: '' }] })).toThrow(/id/)
     })
 })
 
@@ -196,23 +207,23 @@ describe('loadManifest', () => {
 })
 
 describe('loadLevel', () => {
-    test('путь к уровню строится относительно index.json', async () => {
-        const calls = stubFetch({ 'public/data/levels/level-001.json': await Bun.file(REAL_LEVEL_URL).json() })
-        const level = await loadLevel('level-001.json', '001')
-        expect(calls).toEqual(['public/data/levels/level-001.json'])
+    test('путь к уровню строится из id: {id}.json относительно index.json', async () => {
+        const calls = stubFetch({ 'public/data/levels/001.json': await Bun.file(REAL_LEVEL_URL).json() })
+        const level = await loadLevel('001')
+        expect(calls).toEqual(['public/data/levels/001.json'])
         expect(level.id).toBe('001')
         expect(level.width).toBe(7)
     })
 
     test('путь считается от абсолютного адреса манифеста', async () => {
-        const calls = stubFetch({ 'http://host/data/level-001.json': await Bun.file(REAL_LEVEL_URL).json() })
-        await loadLevel('level-001.json', '001', 'http://host/data/index.json')
-        expect(calls).toEqual(['http://host/data/level-001.json'])
+        const calls = stubFetch({ 'http://host/data/001.json': await Bun.file(REAL_LEVEL_URL).json() })
+        await loadLevel('001', 'http://host/data/index.json')
+        expect(calls).toEqual(['http://host/data/001.json'])
     })
 
     test('несовпадающий id записи манифеста и файла уровня — ошибка о расхождении', async () => {
         const file = { ...(await Bun.file(REAL_LEVEL_URL).json()), id: '002' }
-        stubFetch({ 'public/data/levels/level-001.json': file })
-        await expect(loadLevel('level-001.json', '001')).rejects.toThrow(/расхождение.*"001".*"002"/)
+        stubFetch({ 'public/data/levels/001.json': file })
+        await expect(loadLevel('001')).rejects.toThrow(/расхождение.*"001".*"002"/)
     })
 })

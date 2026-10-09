@@ -74,7 +74,7 @@ function zoneButton(label: string, zone: Zone, onClick: () => void): HTMLButtonE
 export interface Ui {
     showEntry(): void
     showLevels(manifest: LevelManifest, done: Set<string>): void
-    showGame(): void
+    showGame(seed?: string): void
     showModal(kind: ModalKind): void
 }
 
@@ -134,6 +134,10 @@ export function createUi(cb: UiCallbacks): Ui {
     hud.append(hudImg)
     hud.addEventListener('click', cb.onMenu)
 
+    const seedBadge = document.createElement('div')
+    seedBadge.style.cssText =
+        'position:absolute;top:12px;right:12px;display:none;color:#fff;font:14px/1 monospace;text-shadow:0 1px 2px #000;pointer-events:none'
+
     const modal = document.createElement('div')
     modal.style.cssText =
         'position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto'
@@ -147,7 +151,7 @@ export function createUi(cb: UiCallbacks): Ui {
     card.append(modalImg)
     modal.append(backdrop, card)
 
-    root.append(entry, levels, hud, modal)
+    root.append(entry, levels, hud, seedBadge, modal)
 
     function renderModal(kind: ModalKind): void {
         for (const b of card.querySelectorAll('button')) b.remove()
@@ -178,11 +182,13 @@ export function createUi(cb: UiCallbacks): Ui {
             entry.style.display = 'flex'
             levels.style.display = 'none'
             hud.style.display = 'none'
+            seedBadge.style.display = 'none'
             renderModal('none')
         },
         showLevels(manifest: LevelManifest, done: Set<string>): void {
             entry.style.display = 'none'
             hud.style.display = 'none'
+            seedBadge.style.display = 'none'
             renderModal('none')
             levels.style.display = 'flex'
             list.textContent = ''
@@ -197,17 +203,23 @@ export function createUi(cb: UiCallbacks): Ui {
                 img.alt = done.has(item.id) ? `done ${item.id}` : `level ${item.id}`
                 img.style.cssText = 'width:72px;height:72px'
                 const label = document.createElement('span')
-                label.textContent = item.name || item.id
+                label.textContent = item.id
                 label.style.cssText = 'font-size:14px;max-width:96px'
                 b.append(img, label)
                 b.addEventListener('click', () => cb.onPick(item.id))
                 list.append(b)
             }
         },
-        showGame(): void {
+        showGame(seed?: string): void {
             entry.style.display = 'none'
             levels.style.display = 'none'
             hud.style.display = 'block'
+            if (seed === undefined) {
+                seedBadge.style.display = 'none'
+            } else {
+                seedBadge.textContent = seed
+                seedBadge.style.display = 'block'
+            }
             renderModal('none')
         },
         showModal(kind: ModalKind): void {

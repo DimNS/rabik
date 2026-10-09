@@ -92,7 +92,7 @@ describe('generator', () => {
     })
 
     test('таблица стен воспроизводит эталон 001 из его сетки типов', async () => {
-        const raw = await Bun.file(new URL('../../public/data/levels/level-001.json', import.meta.url)).json()
+        const raw = await Bun.file(new URL('../../public/data/levels/001.json', import.meta.url)).json()
         const level = parseLevel(raw)
         for (let y = 0; y < level.height; y++) {
             for (let x = 0; x < level.width; x++) {

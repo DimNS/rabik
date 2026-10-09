@@ -3,7 +3,7 @@ import type { CellType, LevelData } from '../core/level-types.ts'
 import { parseLevel } from '../data/levels-loader.ts'
 import { solveLevel } from './solver.ts'
 
-const LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta.url)
+const LEVEL_URL = new URL('../../public/data/levels/001.json', import.meta.url)
 
 function isOrthogonalStep(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1

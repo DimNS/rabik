@@ -4,7 +4,7 @@ import { canMove, type Dir, isStuck, tryMove } from './game-rules.ts'
 import { createEmptyState, createGameState, type GameState } from './game-state.ts'
 import type { CellType, LevelData, Vec2 } from './level-types.ts'
 
-const LEVEL_URL = new URL('../../public/data/levels/level-001.json', import.meta.url)
+const LEVEL_URL = new URL('../../public/data/levels/001.json', import.meta.url)
 
 const OPPOSITE: Record<Dir, Dir> = { up: 'down', down: 'up', left: 'right', right: 'left' }
 
@@ -31,7 +31,7 @@ function countSoilIn(grid: CellType[][]): number {
     return grid.flat().filter((cell) => cell === 'soil').length
 }
 
-// Маршрут под level-001 (лабиринт): вдоль верхней строки, вниз по правому
+// Маршрут под 001 (лабиринт): вдоль верхней строки, вниз по правому
 // столбцу, по низу налево, вверх по левому столбцу и в тупичок (3,3).
 // Каждый шаг — на soil, конец — победа (solved приоритетнее stuck).
 function labyrinthRoute(): Dir[] {

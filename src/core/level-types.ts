@@ -42,8 +42,7 @@ export interface LevelData {
 
 export interface LevelManifestItem {
     id: string
-    file: string
-    name: string
+    seed?: string
 }
 
 export interface LevelManifest {

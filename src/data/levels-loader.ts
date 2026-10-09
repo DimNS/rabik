@@ -94,11 +94,12 @@ export function parseManifest(data: unknown): LevelManifest {
     for (const [i, item] of levels.entries()) {
         const place = `манифест: запись №${i + 1}`
         if (!isRecord(item)) fail(`${place} должна быть объектом`)
-        const { id, file, name } = item
+        const { id, seed } = item
         if (typeof id !== 'string' || id === '') fail(`${place}: id должен быть непустой строкой`)
-        if (typeof file !== 'string' || file === '') fail(`${place} (${id}): file должен быть непустой строкой`)
-        if (typeof name !== 'string' || name === '') fail(`${place} (${id}): name должен быть непустой строкой`)
-        entries.push({ id, file, name })
+        if (seed !== undefined && (typeof seed !== 'string' || seed === '')) {
+            fail(`${place} (${id}): seed должен быть непустой строкой`)
+        }
+        entries.push({ id, ...(seed === undefined ? {} : { seed }) })
     }
     return { levels: entries }
 }
@@ -113,15 +114,12 @@ export async function loadManifest(url: string | URL = LEVELS_INDEX): Promise<Le
     return parseManifest(await fetchJson(url))
 }
 
-export async function loadLevel(
-    file: string,
-    expectedId: string,
-    manifestUrl: string | URL = LEVELS_INDEX,
-): Promise<LevelData> {
+export async function loadLevel(id: string, manifestUrl: string | URL = LEVELS_INDEX): Promise<LevelData> {
+    const file = `${id}.json`
     const url = `${String(manifestUrl).replace(/[^/]*$/, '')}${file}`
     const level = parseLevel(await fetchJson(url))
-    if (level.id !== expectedId) {
-        fail(`расхождение идентификаторов: манифест — "${expectedId}", файл "${file}" содержит "${level.id}"`)
+    if (level.id !== id) {
+        fail(`расхождение идентификаторов: манифест — "${id}", файл "${file}" содержит "${level.id}"`)
     }
     return level
 }
