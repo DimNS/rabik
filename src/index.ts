@@ -159,4 +159,16 @@ async function bootstrap(): Promise<void> {
     ui.showEntry()
 }
 
+function registerServiceWorker(): void {
+    if (!('serviceWorker' in navigator)) return
+    const register = (): void => {
+        navigator.serviceWorker.register('./sw.js').catch((err: unknown) => {
+            console.warn(`sw: регистрация не удалась (${err instanceof Error ? err.message : String(err)})`)
+        })
+    }
+    if (document.readyState === 'complete') register()
+    else window.addEventListener('load', register, { once: true })
+}
+
+registerServiceWorker()
 bootstrap().catch(showError)
