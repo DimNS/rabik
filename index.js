@@ -868,15 +868,15 @@ function createUi(cb) {
         list.append(b);
       }
     },
-    showGame(seed) {
+    showGame(seed, id) {
       entry.style.display = "none";
       levels.style.display = "none";
       hud.style.display = "block";
       hideCredits();
-      if (seed === undefined) {
+      if (seed === undefined && id === undefined) {
         seedBadge.style.display = "none";
       } else {
-        seedBadge.textContent = seed;
+        seedBadge.textContent = id === undefined ? seed ?? "" : seed === undefined ? `№${id}` : `№${id} · ${seed}`;
         seedBadge.style.display = "block";
       }
       renderModal("none");
@@ -984,7 +984,7 @@ async function bootstrap() {
     queue.length = 0;
     layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr());
     renderer.renderAll(state);
-    ui.showGame(entry.seed);
+    ui.showGame(entry.seed, entry.id);
     loop.start();
   }
   function openLevels() {

@@ -1,6 +1,6 @@
 // Service Worker игры Rabik: офлайн-запуск после первого онлайн-визита.
 // Версия кэша — одна строка: bump при каждой сборке с изменившимися ассетами.
-const CACHE = 'rabik-v2'
+const CACHE = 'rabik-v3'
 
 const PRECACHE = [
     // @generated:precache:start
