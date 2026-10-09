@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { LEVELS_INDEX, loadLevel, loadManifest, parseLevel, parseManifest } from './levels-loader.ts'
+import {
+    findManifestDuplicates,
+    LEVELS_INDEX,
+    loadLevel,
+    loadManifest,
+    parseLevel,
+    parseManifest,
+} from './levels-loader.ts'
 
 const REAL_LEVEL_URL = new URL('../../public/data/levels/001.json', import.meta.url)
 const REAL_MANIFEST_URL = new URL('../../public/data/levels/index.json', import.meta.url)
@@ -147,21 +154,77 @@ describe('parseLevel', () => {
 })
 
 describe('parseManifest', () => {
-    test('принимает реальный index.json', async () => {
+    test('реальный index.json: 100 записей, id/seed уникальны', async () => {
         const manifest = parseManifest(await Bun.file(REAL_MANIFEST_URL).json())
-        expect(manifest.levels).toEqual([
-            { id: '001', seed: '---' },
-            { id: '002', seed: '2e8201e7' },
-            { id: '003', seed: '72a1718b' },
-            { id: '004', seed: 'ab553aff' },
-            { id: '005', seed: 'b78a7f4a' },
+        expect(manifest.levels.length).toBe(100)
+        expect(manifest.levels[0]).toEqual({ id: '001', difficulty: 'easy', seed: '---' })
+        expect(findManifestDuplicates(manifest.levels)).toEqual([])
+    })
+
+    test('отклоняет дублирующийся id', () => {
+        expect(() => parseManifest({ levels: [{ id: 'a' }, { id: 'a' }] })).toThrow(/дублирующийся id/)
+    })
+
+    test('отклоняет дублирующийся seed', () => {
+        expect(() =>
+            parseManifest({
+                levels: [
+                    { id: 'a', seed: 'abc123' },
+                    { id: 'b', seed: 'abc123' },
+                ],
+            }),
+        ).toThrow(/дублирующийся seed/)
+    })
+
+    test('findManifestDuplicates возвращает все дубликаты списком', () => {
+        expect(
+            findManifestDuplicates([
+                { id: 'a', seed: 'x' },
+                { id: 'b', seed: 'x' },
+                { id: 'a', seed: 'y' },
+            ]),
+        ).toEqual([
+            {
+                kind: 'seed',
+                value: 'x',
+                entries: [
+                    { index: 1, id: 'a' },
+                    { index: 2, id: 'b' },
+                ],
+            },
+            {
+                kind: 'id',
+                value: 'a',
+                entries: [
+                    { index: 1, id: 'a' },
+                    { index: 3, id: 'a' },
+                ],
+            },
         ])
+    })
+
+    test('пропускает заглушку "---" и отсутствующий seed при проверке уникальности', () => {
+        expect(
+            parseManifest({
+                levels: [{ id: 'a', seed: '---' }, { id: 'b', seed: '---' }, { id: 'c' }, { id: 'd' }],
+            }),
+        ).toEqual({
+            levels: [{ id: 'a', seed: '---' }, { id: 'b', seed: '---' }, { id: 'c' }, { id: 'd' }],
+        })
     })
 
     test('seed необязателен, но обязан быть непустой строкой', () => {
         expect(parseManifest({ levels: [{ id: 'a' }] })).toEqual({ levels: [{ id: 'a' }] })
         expect(() => parseManifest({ levels: [{ id: 'a', seed: '' }] })).toThrow(/seed/)
         expect(() => parseManifest({ levels: [{ id: 'a', seed: 7 }] })).toThrow(/seed/)
+    })
+
+    test('difficulty необязателен, но обязан быть easy, normal или hard', () => {
+        expect(parseManifest({ levels: [{ id: 'a', difficulty: 'easy' }] })).toEqual({
+            levels: [{ id: 'a', difficulty: 'easy' }],
+        })
+        expect(() => parseManifest({ levels: [{ id: 'a', difficulty: 'medium' }] })).toThrow(/difficulty/)
+        expect(() => parseManifest({ levels: [{ id: 'a', difficulty: '' }] })).toThrow(/difficulty/)
     })
 
     test('отклоняет отсутствующий levels и неполные записи', () => {
@@ -193,7 +256,7 @@ function stubFetch(routes: Record<string, unknown>): string[] {
 
 describe('loadManifest', () => {
     test('загружает index.json и парсит записи', async () => {
-        const calls = stubFetch({ [LEVELS_INDEX]: await Bun.file(REAL_MANIFEST_URL).json() })
+        const calls = stubFetch({ [LEVELS_INDEX]: { levels: [{ id: '001', seed: '2e8201e7' }] } })
         const manifest = await loadManifest()
         expect(calls).toEqual([LEVELS_INDEX])
         expect(manifest.levels[0]?.id).toBe('001')

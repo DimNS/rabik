@@ -9,7 +9,7 @@
         "typecheck": "tsc --noEmit",
         "lint": "biome check .",
         "test": "bun test",
-        "check": "bun run typecheck && bun run lint && bun run test"
+        "check": "bun run typecheck && bun run lint && bun scripts/check-levels.ts && bun run test"
     },
     "devDependencies": {
         "@biomejs/biome": "~2.5.15",

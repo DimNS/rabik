@@ -1,4 +1,4 @@
-.PHONY: install ai-check check test dev build atlas release
+.PHONY: install ai-check check levels-lint test dev build atlas release
 
 install:
 	@bun install
@@ -9,6 +9,9 @@ ai-check: check
 
 check:
 	@bun run check
+
+levels-lint:
+	@bun scripts/check-levels.ts
 
 test:
 	@bun run test

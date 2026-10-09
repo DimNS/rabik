@@ -51,6 +51,12 @@ export const MODAL_ZONES: Record<string, Record<string, Zone>> = {
     },
 }
 
+const DIFFICULTY_COLORS: Record<string, string> = {
+    easy: '#22c55e',
+    normal: '#3b82f6',
+    hard: '#ef4444',
+}
+
 export function nextLevelId(levels: { id: string }[], currentId: string): string | null {
     const i = levels.findIndex((l) => l.id === currentId)
     return levels[i + 1]?.id ?? null
@@ -169,7 +175,8 @@ export function createUi(cb: UiCallbacks): Ui {
     levels.style.cssText =
         'position:absolute;inset:0;display:none;flex-direction:column;align-items:center;gap:16px;background:#111;padding:24px 16px;pointer-events:auto;overflow:auto'
     const list = document.createElement('div')
-    list.style.cssText = 'display:flex;flex-wrap:wrap;gap:16px;justify-content:center'
+    list.style.cssText =
+        'display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;justify-items:center;max-width:520px;width:100%'
     const art = document.createElement('img')
     art.src = UI_ASSETS.art
     art.alt = ''
@@ -257,11 +264,21 @@ export function createUi(cb: UiCallbacks): Ui {
                 const img = document.createElement('img')
                 img.src = done.has(item.id) ? UI_ASSETS.done : UI_ASSETS.none
                 img.alt = done.has(item.id) ? `done ${item.id}` : `level ${item.id}`
-                img.style.cssText = 'width:72px;height:72px'
+                img.style.cssText = 'width:72px;height:72px;display:block'
+                const wrap = document.createElement('div')
+                wrap.style.cssText = 'position:relative;width:72px;height:72px'
+                wrap.append(img)
+                const color = item.difficulty === undefined ? undefined : DIFFICULTY_COLORS[item.difficulty]
+                if (color !== undefined) {
+                    const dot = document.createElement('div')
+                    dot.setAttribute('aria-label', `difficulty ${item.difficulty}`)
+                    dot.style.cssText = `position:absolute;right:4px;bottom:4px;width:12px;height:12px;border-radius:50%;background:${color};pointer-events:none`
+                    wrap.append(dot)
+                }
                 const label = document.createElement('span')
                 label.textContent = item.id
                 label.style.cssText = 'font-size:14px;max-width:96px'
-                b.append(img, label)
+                b.append(wrap, label)
                 b.addEventListener('click', () => cb.onPick(item.id))
                 list.append(b)
             }

@@ -84,6 +84,35 @@ export function parseLevel(data: unknown): LevelData {
     return { id, width, height, tiles: frames, grid, start: { x, y } }
 }
 
+export interface ManifestDuplicate {
+    kind: 'id' | 'seed'
+    value: string
+    /** Вхождения в порядке файла: номер записи (с 1) и id. */
+    entries: { index: number; id: string }[]
+}
+
+// Все дубликаты id и seed списком (порядок — по первому повтору в файле).
+// Не бросает: для отчёта целиком; битые записи пропускаются.
+export function findManifestDuplicates(items: readonly unknown[]): ManifestDuplicate[] {
+    const ids = new Map<string, { index: number; id: string }[]>()
+    const seeds = new Map<string, { index: number; id: string }[]>()
+    items.forEach((item, i) => {
+        if (!isRecord(item)) return
+        const { id, seed } = item
+        if (typeof id !== 'string' || id === '') return
+        const at = { index: i + 1, id }
+        ids.set(id, [...(ids.get(id) ?? []), at])
+        if (typeof seed === 'string' && seed !== '' && seed !== '---') {
+            seeds.set(seed, [...(seeds.get(seed) ?? []), at])
+        }
+    })
+    const out: ManifestDuplicate[] = []
+    for (const [value, at] of ids) if (at.length > 1) out.push({ kind: 'id', value, entries: at })
+    for (const [value, at] of seeds) if (at.length > 1) out.push({ kind: 'seed', value, entries: at })
+    out.sort((a, b) => (a.entries[1]?.index ?? 0) - (b.entries[1]?.index ?? 0))
+    return out
+}
+
 export function parseManifest(data: unknown): LevelManifest {
     if (!isRecord(data)) fail('манифест: данные должны быть объектом')
 
@@ -94,12 +123,28 @@ export function parseManifest(data: unknown): LevelManifest {
     for (const [i, item] of levels.entries()) {
         const place = `манифест: запись №${i + 1}`
         if (!isRecord(item)) fail(`${place} должна быть объектом`)
-        const { id, seed } = item
+        const { id, seed, difficulty } = item
         if (typeof id !== 'string' || id === '') fail(`${place}: id должен быть непустой строкой`)
         if (seed !== undefined && (typeof seed !== 'string' || seed === '')) {
             fail(`${place} (${id}): seed должен быть непустой строкой`)
         }
-        entries.push({ id, ...(seed === undefined ? {} : { seed }) })
+        if (difficulty !== undefined && difficulty !== 'easy' && difficulty !== 'normal' && difficulty !== 'hard') {
+            fail(`${place} (${id}): difficulty должен быть easy, normal или hard`)
+        }
+        entries.push({
+            id,
+            ...(seed === undefined ? {} : { seed }),
+            ...(difficulty === undefined ? {} : { difficulty }),
+        })
+    }
+    for (const dup of findManifestDuplicates(entries)) {
+        const first = dup.entries[0]
+        const second = dup.entries[1]
+        if (first === undefined || second === undefined) continue
+        if (dup.kind === 'id') fail(`манифест: запись №${second.index} (${second.id}): дублирующийся id`)
+        fail(
+            `манифест: запись №${second.index} (${second.id}): дублирующийся seed "${dup.value}" (уже у "${first.id}")`,
+        )
     }
     return { levels: entries }
 }
