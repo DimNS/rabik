@@ -159,6 +159,31 @@ function parseLevel(data) {
   }
   return { id, width, height, tiles: frames, grid, start: { x, y } };
 }
+function findManifestDuplicates(items) {
+  const ids = new Map;
+  const seeds = new Map;
+  items.forEach((item, i) => {
+    if (!isRecord(item))
+      return;
+    const { id, seed } = item;
+    if (typeof id !== "string" || id === "")
+      return;
+    const at = { index: i + 1, id };
+    ids.set(id, [...ids.get(id) ?? [], at]);
+    if (typeof seed === "string" && seed !== "" && seed !== "---") {
+      seeds.set(seed, [...seeds.get(seed) ?? [], at]);
+    }
+  });
+  const out = [];
+  for (const [value, at] of ids)
+    if (at.length > 1)
+      out.push({ kind: "id", value, entries: at });
+  for (const [value, at] of seeds)
+    if (at.length > 1)
+      out.push({ kind: "seed", value, entries: at });
+  out.sort((a, b) => (a.entries[1]?.index ?? 0) - (b.entries[1]?.index ?? 0));
+  return out;
+}
 function parseManifest(data) {
   if (!isRecord(data))
     fail("манифест: данные должны быть объектом");
@@ -170,13 +195,29 @@ function parseManifest(data) {
     const place = `манифест: запись №${i + 1}`;
     if (!isRecord(item))
       fail(`${place} должна быть объектом`);
-    const { id, seed } = item;
+    const { id, seed, difficulty } = item;
     if (typeof id !== "string" || id === "")
       fail(`${place}: id должен быть непустой строкой`);
     if (seed !== undefined && (typeof seed !== "string" || seed === "")) {
       fail(`${place} (${id}): seed должен быть непустой строкой`);
     }
-    entries.push({ id, ...seed === undefined ? {} : { seed } });
+    if (difficulty !== undefined && difficulty !== "easy" && difficulty !== "normal" && difficulty !== "hard") {
+      fail(`${place} (${id}): difficulty должен быть easy, normal или hard`);
+    }
+    entries.push({
+      id,
+      ...seed === undefined ? {} : { seed },
+      ...difficulty === undefined ? {} : { difficulty }
+    });
+  }
+  for (const dup of findManifestDuplicates(entries)) {
+    const first = dup.entries[0];
+    const second = dup.entries[1];
+    if (first === undefined || second === undefined)
+      continue;
+    if (dup.kind === "id")
+      fail(`манифест: запись №${second.index} (${second.id}): дублирующийся id`);
+    fail(`манифест: запись №${second.index} (${second.id}): дублирующийся seed "${dup.value}" (уже у "${first.id}")`);
   }
   return { levels: entries };
 }
@@ -200,7 +241,7 @@ async function loadLevel(id, manifestUrl = LEVELS_INDEX) {
 }
 
 // src/data/progress.ts
-var PROGRESS_KEY = "oneway.done.v1";
+var PROGRESS_KEY = "rabik.done.v1";
 var memFallback = [];
 function defaultStore() {
   try {
@@ -622,6 +663,11 @@ var MODAL_ZONES = {
     close: { left: 80, top: 0, width: 19, height: 28 }
   }
 };
+var DIFFICULTY_COLORS = {
+  easy: "#22c55e",
+  normal: "#3b82f6",
+  hard: "#ef4444"
+};
 function nextLevelId(levels, currentId) {
   const i = levels.findIndex((l) => l.id === currentId);
   return levels[i + 1]?.id ?? null;
@@ -722,7 +768,7 @@ function createUi(cb) {
   const levels = document.createElement("div");
   levels.style.cssText = "position:absolute;inset:0;display:none;flex-direction:column;align-items:center;gap:16px;background:#111;padding:24px 16px;pointer-events:auto;overflow:auto";
   const list = document.createElement("div");
-  list.style.cssText = "display:flex;flex-wrap:wrap;gap:16px;justify-content:center";
+  list.style.cssText = "display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;justify-items:center;max-width:520px;width:100%";
   const art = document.createElement("img");
   art.src = UI_ASSETS.art;
   art.alt = "";
@@ -803,11 +849,21 @@ function createUi(cb) {
         const img = document.createElement("img");
         img.src = done.has(item.id) ? UI_ASSETS.done : UI_ASSETS.none;
         img.alt = done.has(item.id) ? `done ${item.id}` : `level ${item.id}`;
-        img.style.cssText = "width:72px;height:72px";
+        img.style.cssText = "width:72px;height:72px;display:block";
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "position:relative;width:72px;height:72px";
+        wrap.append(img);
+        const color = item.difficulty === undefined ? undefined : DIFFICULTY_COLORS[item.difficulty];
+        if (color !== undefined) {
+          const dot = document.createElement("div");
+          dot.setAttribute("aria-label", `difficulty ${item.difficulty}`);
+          dot.style.cssText = `position:absolute;right:4px;bottom:4px;width:12px;height:12px;border-radius:50%;background:${color};pointer-events:none`;
+          wrap.append(dot);
+        }
         const label = document.createElement("span");
         label.textContent = item.id;
         label.style.cssText = "font-size:14px;max-width:96px";
-        b.append(img, label);
+        b.append(wrap, label);
         b.addEventListener("click", () => cb.onPick(item.id));
         list.append(b);
       }

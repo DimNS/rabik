@@ -1,6 +1,6 @@
 {
-    "name": "OneWay — замости всю землю",
-    "short_name": "OneWay",
+    "name": "Rabik — замости всю землю",
+    "short_name": "Rabik",
     "start_url": "./index.html",
     "scope": "./",
     "display": "standalone",
