@@ -118,22 +118,17 @@ function solveLevel(level, max = 500000) {
   return null;
 }
 function isWall(g, x, y) { return y < 0 || x < 0 || y >= g.length || x >= g[y].length || g[y][x] === 'wall'; }
+// Таблица «маска → кадр» — копия src/gen/generator.ts (pickWallFrame): группы сверены
+// попиксельно с raw и эталоном 001. Править оба места синхронно.
+const OPEN_SIDE_FRAMES = { 2: 'w307', 8: 'w302', 4: 'w305', 1: 'w304', 10: 'w310', 5: 'w313', 12: 'w303', 6: 'w308', 3: 'w306', 9: 'w301', 11: 'w309', 14: 'w311', 13: 'w312', 7: 'w314', 15: 'w201' };
+const OPEN_DIAG_FRAMES = { 0: 'w101', 8: 'w401', 1: 'w402', 2: 'w403', 4: 'w404', 9: 'w405', 3: 'w406', 6: 'w407', 12: 'w408', 7: 'w409', 14: 'w410', 13: 'w411', 11: 'w412', 15: 'w413', 10: 'w414', 5: 'w415' };
 function pickWall(g, x, y) {
   const n = isWall(g, x, y - 1), e = isWall(g, x + 1, y), s = isWall(g, x, y + 1), w = isWall(g, x - 1, y);
   if (n && e && s && w) {
-    const ne = isWall(g, x + 1, y - 1), se = isWall(g, x + 1, y + 1), sw = isWall(g, x - 1, y + 1), nw = isWall(g, x - 1, y - 1);
-    if (ne && se && sw && nw) return 'w101';
-    if (!ne && !se && sw && nw) return 'w406';
-    if (ne && se && sw && !nw) return 'w405';
-    if (ne && se && !sw && nw) return 'w407';
-    if (ne && !se && !sw && nw) return 'w408';
-    return 'w405';
+    const k = (!isWall(g, x + 1, y - 1) ? 1 : 0) | (!isWall(g, x + 1, y + 1) ? 2 : 0) | (!isWall(g, x - 1, y + 1) ? 4 : 0) | (!isWall(g, x - 1, y - 1) ? 8 : 0);
+    return OPEN_DIAG_FRAMES[k];
   }
-  if (!n && !e && !s && !w) return 'w201';
-  const c = n + e + s + w;
-  if (c === 2) { if (s && e) return 'w403'; if (s && w) return 'w404'; if (n && e) return 'w402'; if (n && w) return 'w401'; return 'w308'; }
-  if (c === 1) return e ? 'w309' : 'w201';
-  if (!s) return 'w307'; if (!n) return 'w310'; if (!e) return 'w305'; return 'w304';
+  return OPEN_SIDE_FRAMES[(!n ? 8 : 0) | (!e ? 4 : 0) | (!s ? 2 : 0) | (!w ? 1 : 0)];
 }
 function findWalk(w, h, start, target, rng) {
   const vis = Array.from({ length: h }, () => Array(w).fill(false));

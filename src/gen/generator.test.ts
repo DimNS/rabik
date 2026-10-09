@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseLevel } from '../data/levels-loader.ts'
-import { DIFFICULTY_PRESETS, generateLevel, MAX_HEIGHT, MAX_WIDTH } from './generator.ts'
+import { DIFFICULTY_PRESETS, generateLevel, MAX_HEIGHT, MAX_WIDTH, pickWallFrame } from './generator.ts'
 import { solveLevel } from './solver.ts'
 
 function wallRatio(difficulty: 'easy' | 'normal' | 'hard', seed: string): number {
@@ -89,5 +89,18 @@ describe('generator', () => {
         expect(b.height).toBe(a.height)
         expect(b.tiles).toEqual(a.tiles)
         expect(b.start).toEqual(a.start)
+    })
+
+    test('таблица стен воспроизводит эталон 001 из его сетки типов', async () => {
+        const raw = await Bun.file(new URL('../../public/data/levels/level-001.json', import.meta.url)).json()
+        const level = parseLevel(raw)
+        for (let y = 0; y < level.height; y++) {
+            for (let x = 0; x < level.width; x++) {
+                if (level.grid[y]?.[x] !== 'wall') continue
+                const want = level.tiles[y]?.[x]
+                if (want === undefined) throw new Error(`нет кадра (${x}, ${y})`)
+                expect(pickWallFrame(level.grid, x, y)).toBe(want)
+            }
+        }
     })
 })

@@ -88,39 +88,68 @@ function isWall(grid: string[][], x: number, y: number): boolean {
     return grid[y]?.[x] === 'wall'
 }
 
-// Упрощённая таблица «маска → кадр»: по одному варианту на группу масок.
-// ponytail: один вариант на группу вместо подбора профиля стыка, уточнить по галерее при нестыках.
-function pickWallFrame(grid: string[][], x: number, y: number): string {
+// Полная таблица «маска → кадр» по design.md change hand-drawn-tiles-mapping.
+// Группы сверены попиксельно с raw (доля серого по кромкам/углам) и эталоном 001:
+// открытые стороны → кромки/углы 3xx, все стороны замкнуты + открытые диагонали → 401–415.
+// Внутри группы берётся первый вариант (001 использует только их); 5xx — запас на потом.
+const OPEN_SIDE_FRAMES: Record<number, string> = {
+    2: 'w307', // открыта S
+    8: 'w302', // открыта N
+    4: 'w305', // открыта E
+    1: 'w304', // открыта W
+    10: 'w310', // N+S
+    5: 'w313', // E+W
+    12: 'w303', // N+E
+    6: 'w308', // E+S
+    3: 'w306', // S+W
+    9: 'w301', // N+W
+    11: 'w309', // только E
+    14: 'w311', // только W
+    13: 'w312', // только S
+    7: 'w314', // только N
+    15: 'w201', // изолированная
+}
+
+// Открытые диагонали при замкнутых сторонах: 401–404 одиночные,
+// 405–408 пары по сторонам света, 409–412 тройки, 413 все, 414/415 диагональные пары.
+const OPEN_DIAG_FRAMES: Record<number, string> = {
+    0: 'w101',
+    8: 'w401', // NW
+    1: 'w402', // NE
+    2: 'w403', // SE
+    4: 'w404', // SW
+    9: 'w405', // NE+NW
+    3: 'w406', // NE+SE
+    6: 'w407', // SE+SW
+    12: 'w408', // SW+NW
+    7: 'w409', // без NW
+    14: 'w410', // без NE
+    13: 'w411', // без SE
+    11: 'w412', // без SW
+    15: 'w413',
+    10: 'w414', // SE+NW
+    5: 'w415', // NE+SW
+}
+
+export function pickWallFrame(grid: string[][], x: number, y: number): string {
     const n = isWall(grid, x, y - 1)
     const e = isWall(grid, x + 1, y)
     const s = isWall(grid, x, y + 1)
     const w = isWall(grid, x - 1, y)
     if (n && e && s && w) {
-        const ne = isWall(grid, x + 1, y - 1)
-        const se = isWall(grid, x + 1, y + 1)
-        const sw = isWall(grid, x - 1, y + 1)
-        const nw = isWall(grid, x - 1, y - 1)
-        if (ne && se && sw && nw) return 'w101'
-        if (!ne && !se && sw && nw) return 'w406'
-        if (ne && se && sw && !nw) return 'w405'
-        if (ne && se && !sw && nw) return 'w407'
-        if (ne && !se && !sw && nw) return 'w408'
-        return 'w405'
+        const key =
+            (!isWall(grid, x + 1, y - 1) ? 1 : 0) |
+            (!isWall(grid, x + 1, y + 1) ? 2 : 0) |
+            (!isWall(grid, x - 1, y + 1) ? 4 : 0) |
+            (!isWall(grid, x - 1, y - 1) ? 8 : 0)
+        const frame = OPEN_DIAG_FRAMES[key]
+        if (frame === undefined) throw new Error(`pickWallFrame: нет кадра под диагонали ${key}`)
+        return frame
     }
-    if (!n && !e && !s && !w) return 'w201'
-    const count = (n ? 1 : 0) + (e ? 1 : 0) + (s ? 1 : 0) + (w ? 1 : 0)
-    if (count === 2) {
-        if (s && e) return 'w403'
-        if (s && w) return 'w404'
-        if (n && e) return 'w402'
-        if (n && w) return 'w401'
-        return 'w308'
-    }
-    if (count === 1) return e ? 'w309' : 'w201'
-    if (!s) return 'w307'
-    if (!n) return 'w310'
-    if (!e) return 'w305'
-    return 'w304'
+    const key = (!n ? 8 : 0) | (!e ? 4 : 0) | (!s ? 2 : 0) | (!w ? 1 : 0)
+    const frame = OPEN_SIDE_FRAMES[key]
+    if (frame === undefined) throw new Error(`pickWallFrame: нет кадра под маску ${key}`)
+    return frame
 }
 
 // Кроп пустых wall-полей: bbox маршрута + рамка в 1 клетку под стыки кадров.
