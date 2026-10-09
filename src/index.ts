@@ -112,7 +112,7 @@ async function bootstrap(): Promise<void> {
         queue.length = 0
         layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
         renderer.renderAll(state)
-        ui.showGame(entry.seed)
+        ui.showGame(entry.seed, entry.id)
         loop.start()
     }
 

@@ -81,7 +81,7 @@ function zoneButton(label: string, zone: Zone, onClick: () => void): HTMLButtonE
 export interface Ui {
     showEntry(): void
     showLevels(manifest: LevelManifest, done: Set<string>): void
-    showGame(seed?: string): void
+    showGame(seed?: string, id?: string): void
     showModal(kind: ModalKind): void
 }
 
@@ -283,15 +283,16 @@ export function createUi(cb: UiCallbacks): Ui {
                 list.append(b)
             }
         },
-        showGame(seed?: string): void {
+        showGame(seed?: string, id?: string): void {
             entry.style.display = 'none'
             levels.style.display = 'none'
             hud.style.display = 'block'
             hideCredits()
-            if (seed === undefined) {
+            if (seed === undefined && id === undefined) {
                 seedBadge.style.display = 'none'
             } else {
-                seedBadge.textContent = seed
+                seedBadge.textContent =
+                    id === undefined ? (seed ?? '') : seed === undefined ? `№${id}` : `№${id} · ${seed}`
                 seedBadge.style.display = 'block'
             }
             renderModal('none')
