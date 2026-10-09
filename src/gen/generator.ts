@@ -235,6 +235,7 @@ export function generateLevel(options: GenerateOptions): LevelData {
                 } else if (cell === 'soil') {
                     if (pairRight.has(`${x},${y}`)) row.push('s301')
                     else if (pairRight.has(`${x - 1},${y}`)) row.push('s302')
+                    else if (rng() < 0.08) row.push('s201')
                     else {
                         const h = ((x * 73856093) ^ (y * 19349663) ^ (x * y * 83492791)) >>> 0
                         const r = h % 10
@@ -245,6 +246,17 @@ export function generateLevel(options: GenerateOptions): LevelData {
                 }
             }
             tiles.push(row)
+        }
+        // Гарантия наличия люка: 8% обычно даёт 1–3 штуки, но на мелких полях может дать ноль.
+        if (!tiles.flat().includes('s201')) {
+            const singles: Vec2[] = []
+            for (let y = 0; y < height; y++)
+                for (let x = 0; x < width; x++) if (tiles[y]?.[x]?.startsWith('s10')) singles.push({ x, y })
+            if (singles.length > 0) {
+                const pick = singles[Math.floor(rng() * singles.length)] as Vec2
+                const trow = tiles[pick.y] as string[]
+                trow[pick.x] = 's201'
+            }
         }
 
         const level: LevelData = {
