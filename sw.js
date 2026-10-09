@@ -1,6 +1,6 @@
-// Service Worker игры OneWay: офлайн-запуск после первого онлайн-визита.
+// Service Worker игры Rabik: офлайн-запуск после первого онлайн-визита.
 // Версия кэша — одна строка: bump при каждой сборке с изменившимися ассетами.
-const CACHE = 'oneway-v1'
+const CACHE = 'rabik-v1'
 
 const PRECACHE = [
     // @generated:precache:start

@@ -27,7 +27,7 @@ describe('progress', () => {
     })
 
     test('битый JSON и пустой id не роняют', () => {
-        const store = memStore({ 'oneway.done.v1': 'not-json' })
+        const store = memStore({ 'rabik.done.v1': 'not-json' })
         expect(loadDone(store).size).toBe(0)
         expect(markDone('', store).size).toBe(0)
     })

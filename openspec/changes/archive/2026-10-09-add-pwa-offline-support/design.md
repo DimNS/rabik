@@ -32,7 +32,7 @@
 
 ### D2: `sw.js` — статичный файл с версионированным кэшем, копируется как есть
 
-SW без шаблонизации: `const CACHE = 'oneway-v1'`, bump версии — правкой одной строки. Список precache между маркерами `@generated:precache` обновляет `scripts/gen-sw.ts` (сканирует `icons/`, спрайты, UI и уровни), `build.sh` запускает его перед копированием — новые уровни подхватываются сами. `install` — precache shell, `activate` — `skipWaiting` + `clients.claim` + удаление кэшей не текущей версии, `fetch` — cache-first для same-origin GET с сетевым фолбэком и `put` успешных ответов, навигации — фолбэк на `index.html`.
+SW без шаблонизации: `const CACHE = 'rabik-v1'`, bump версии — правкой одной строки. Список precache между маркерами `@generated:precache` обновляет `scripts/gen-sw.ts` (сканирует `icons/`, спрайты, UI и уровни), `build.sh` запускает его перед копированием — новые уровни подхватываются сами. `install` — precache shell, `activate` — `skipWaiting` + `clients.claim` + удаление кэшей не текущей версии, `fetch` — cache-first для same-origin GET с сетевым фолбэком и `put` успешных ответов, навигации — фолбэк на `index.html`.
 
 Альтернативы: Workbox — отвергнут (новая зависимость ради статики); runtime-only кэширование без precache — отвергнуто (первый офлайн-заход отдаст битую страницу, нарушает спеку).
 

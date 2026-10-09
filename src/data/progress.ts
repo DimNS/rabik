@@ -1,4 +1,4 @@
-export const PROGRESS_KEY = 'oneway.done.v1'
+export const PROGRESS_KEY = 'rabik.done.v1'
 
 export interface ProgressStore {
     getItem(key: string): string | null
