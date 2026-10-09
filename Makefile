@@ -1,4 +1,4 @@
-.PHONY: install ai-check check test dev build atlas
+.PHONY: install ai-check check test dev build atlas release
 
 install:
 	@bun install
@@ -21,3 +21,6 @@ build:
 
 atlas:
 	@bun scripts/gen-atlas.ts
+
+release:
+	@./scripts/release.sh $(if $(DRY_RUN),--dry-run)
