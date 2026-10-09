@@ -15,6 +15,7 @@ export interface UiCallbacks {
 export const UI_ASSETS = {
     logo: 'public/assets/ui/logo.png',
     play: 'public/assets/ui/button/play.png',
+    credits: 'public/assets/ui/button/credits.png',
     backBtn: 'public/assets/ui/button/back.png',
     done: 'public/assets/ui/lvlsel/done.png',
     none: 'public/assets/ui/lvlsel/none.png',
@@ -94,7 +95,7 @@ export function createUi(cb: UiCallbacks): Ui {
 
     const entry = document.createElement('div')
     entry.style.cssText =
-        'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:#111;pointer-events:auto'
+        'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:linear-gradient(to top, #FFFFFF 0%, #BFE3FF 100%);pointer-events:auto'
     const logo = document.createElement('img')
     logo.src = UI_ASSETS.logo
     logo.alt = 'Road builder'
@@ -109,7 +110,60 @@ export function createUi(cb: UiCallbacks): Ui {
     playImg.style.cssText = 'width:220px;max-width:60vw'
     play.append(playImg)
     play.addEventListener('click', cb.onPlay)
-    entry.append(logo, play)
+    const creditsBtn = document.createElement('button')
+    creditsBtn.type = 'button'
+    creditsBtn.setAttribute('aria-label', 'credits')
+    creditsBtn.style.cssText = 'background:none;border:none;cursor:pointer;padding:0'
+    const creditsImg = document.createElement('img')
+    creditsImg.src = UI_ASSETS.credits
+    creditsImg.alt = 'credits'
+    creditsImg.style.cssText = 'width:220px;max-width:60vw'
+    creditsBtn.append(creditsImg)
+    entry.append(logo, play, creditsBtn)
+
+    const creditsModal = document.createElement('div')
+    creditsModal.style.cssText =
+        'position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto'
+    const creditsBackdrop = document.createElement('div')
+    creditsBackdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.5)'
+    const creditsCard = document.createElement('div')
+    creditsCard.style.cssText =
+        'position:relative;background:#fff;color:#111;font:16px/1.5 sans-serif;border-radius:12px;padding:24px 28px;max-width:min(420px,90vw);text-align:left'
+    const creditsTitle = document.createElement('div')
+    creditsTitle.textContent = 'Team:'
+    creditsTitle.style.cssText = 'font-weight:700;margin-bottom:8px'
+    const creditsList = document.createElement('div')
+    for (const line of [
+        'Programmer: Dmitriy Shcherbakov',
+        'Designer: Aleksandr Kalinin',
+        'Illustrator: Alena Maltseva',
+    ]) {
+        const row = document.createElement('div')
+        row.textContent = line
+        creditsList.append(row)
+    }
+    const creditsClose = document.createElement('button')
+    creditsClose.type = 'button'
+    creditsClose.setAttribute('aria-label', 'close credits')
+    creditsClose.textContent = '✕'
+    creditsClose.style.cssText =
+        'position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:4px'
+    creditsCard.append(creditsTitle, creditsList, creditsClose)
+    creditsModal.append(creditsBackdrop, creditsCard)
+    entry.append(creditsModal)
+
+    function hideCredits(): void {
+        creditsModal.style.display = 'none'
+    }
+    function showCredits(): void {
+        creditsModal.style.display = 'flex'
+    }
+    creditsBtn.addEventListener('click', showCredits)
+    creditsClose.addEventListener('click', hideCredits)
+    creditsBackdrop.addEventListener('click', hideCredits)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') hideCredits()
+    })
 
     const levels = document.createElement('div')
     levels.style.cssText =
@@ -183,12 +237,14 @@ export function createUi(cb: UiCallbacks): Ui {
             levels.style.display = 'none'
             hud.style.display = 'none'
             seedBadge.style.display = 'none'
+            hideCredits()
             renderModal('none')
         },
         showLevels(manifest: LevelManifest, done: Set<string>): void {
             entry.style.display = 'none'
             hud.style.display = 'none'
             seedBadge.style.display = 'none'
+            hideCredits()
             renderModal('none')
             levels.style.display = 'flex'
             list.textContent = ''
@@ -214,6 +270,7 @@ export function createUi(cb: UiCallbacks): Ui {
             entry.style.display = 'none'
             levels.style.display = 'none'
             hud.style.display = 'block'
+            hideCredits()
             if (seed === undefined) {
                 seedBadge.style.display = 'none'
             } else {
