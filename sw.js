@@ -1,6 +1,6 @@
 // Service Worker игры Rabik: офлайн-запуск после первого онлайн-визита.
 // Версия кэша — одна строка: bump при каждой сборке с изменившимися ассетами.
-const CACHE = 'rabik-v3'
+const CACHE = 'rabik-v5'
 
 const PRECACHE = [
     // @generated:precache:start
@@ -16,11 +16,14 @@ const PRECACHE = [
     './public/assets/sprites/tiles.json',
     './public/assets/ui/button/back.png',
     './public/assets/ui/button/credits.png',
+    './public/assets/ui/button/menu.png',
     './public/assets/ui/button/play.png',
+    './public/assets/ui/button/restart.png',
     './public/assets/ui/logo.png',
     './public/assets/ui/lvlsel/art.png',
     './public/assets/ui/lvlsel/done.png',
     './public/assets/ui/lvlsel/none.png',
+    './public/assets/ui/modal/confirm.png',
     './public/assets/ui/modal/fail.png',
     './public/assets/ui/modal/menu.png',
     './public/assets/ui/modal/win.png',
