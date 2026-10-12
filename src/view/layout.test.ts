@@ -48,6 +48,20 @@ describe('computeLayout', () => {
         expect(layout.offsetY * 2 + 3 * layout.tileSize).toBeLessThanOrEqual(61)
     })
 
+    test('высокое поле 7x14 полностью помещается в окно', () => {
+        for (const [cssW, cssH] of [
+            [390, 844],
+            [360, 640],
+            [1920, 1080],
+            [1280, 800],
+        ] as [number, number][]) {
+            const layout = computeLayout(cssW, cssH, 7, 14, 1)
+            expect(layout.tileSize).toBeLessThanOrEqual(130)
+            expect(layout.offsetX * 2 + 7 * layout.tileSize).toBeLessThanOrEqual(cssW)
+            expect(layout.offsetY * 2 + 14 * layout.tileSize).toBeLessThanOrEqual(cssH)
+        }
+    })
+
     test('devicePixelRatio сохраняется в раскладке', () => {
         expect(computeLayout(200, 200, 4, 4, 2).dpr).toBe(2)
         expect(computeLayout(200, 200, 4, 4, 1.5).dpr).toBe(1.5)

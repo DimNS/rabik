@@ -56,7 +56,15 @@ export function createRenderer(options: RendererOptions): Renderer {
         ctx.setTransform(1, 0, 0, 1, 0, 0)
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
         ctx.restore()
-        ctx.drawImage(layer, layout.offsetX, layout.offsetY)
+        // Слой хранится в device-пикселях, рисуем в явный CSS-прямоугольник:
+        // геометрия та же, что раньше, источник — чёткий на hidpi.
+        ctx.drawImage(
+            layer,
+            layout.offsetX,
+            layout.offsetY,
+            state.width * layout.tileSize,
+            state.height * layout.tileSize,
+        )
         const { x: sx, y: sy, w, h } = rabbit.getFrame(animator.current()).frame
         const rect = playerRect(state.player.x, state.player.y, layout)
         const angle = facingAngle(getFacing())
@@ -74,8 +82,11 @@ export function createRenderer(options: RendererOptions): Renderer {
     return {
         renderAll(state: GameState): void {
             const layout = getLayout()
-            layer.width = state.width * layout.tileSize
-            layer.height = state.height * layout.tileSize
+            // Слой — в той же шкале, что backing store canvas (device-пиксели):
+            // ячейки по-прежнему рисуются в CSS-единицах, чёткость та же.
+            layer.width = Math.max(1, Math.round(state.width * layout.tileSize * layout.dpr))
+            layer.height = Math.max(1, Math.round(state.height * layout.tileSize * layout.dpr))
+            layerCtx.setTransform(layout.dpr, 0, 0, layout.dpr, 0, 0)
             layerCtx.imageSmoothingEnabled = false
             for (let y = 0; y < state.height; y++) {
                 for (let x = 0; x < state.width; x++) {

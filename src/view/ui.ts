@@ -17,6 +17,8 @@ export const UI_ASSETS = {
     play: 'public/assets/ui/button/play.png',
     credits: 'public/assets/ui/button/credits.png',
     backBtn: 'public/assets/ui/button/back.png',
+    menuBtn: 'public/assets/ui/button/menu.png',
+    restartBtn: 'public/assets/ui/button/restart.png',
     done: 'public/assets/ui/lvlsel/done.png',
     none: 'public/assets/ui/lvlsel/none.png',
     art: 'public/assets/ui/lvlsel/art.png',
@@ -189,11 +191,23 @@ export function createUi(cb: UiCallbacks): Ui {
     hud.style.cssText =
         'position:absolute;top:12px;left:12px;display:none;background:none;border:none;cursor:pointer;pointer-events:auto;padding:0'
     const hudImg = document.createElement('img')
-    hudImg.src = UI_ASSETS.backBtn
+    hudImg.src = UI_ASSETS.menuBtn
     hudImg.alt = 'menu'
     hudImg.style.cssText = 'width:48px;height:48px'
     hud.append(hudImg)
     hud.addEventListener('click', cb.onMenu)
+
+    const hudRestart = document.createElement('button')
+    hudRestart.type = 'button'
+    hudRestart.setAttribute('aria-label', 'restart level')
+    hudRestart.style.cssText =
+        'position:absolute;top:12px;left:68px;display:none;background:none;border:none;cursor:pointer;pointer-events:auto;padding:0'
+    const hudRestartImg = document.createElement('img')
+    hudRestartImg.src = UI_ASSETS.restartBtn
+    hudRestartImg.alt = 'restart level'
+    hudRestartImg.style.cssText = 'width:48px;height:48px'
+    hudRestart.append(hudRestartImg)
+    hudRestart.addEventListener('click', cb.onRestart)
 
     const seedBadge = document.createElement('div')
     seedBadge.style.cssText =
@@ -212,7 +226,7 @@ export function createUi(cb: UiCallbacks): Ui {
     card.append(modalImg)
     modal.append(backdrop, card)
 
-    root.append(entry, levels, hud, seedBadge, modal)
+    root.append(entry, levels, hud, hudRestart, seedBadge, modal)
 
     function renderModal(kind: ModalKind): void {
         for (const b of card.querySelectorAll('button')) b.remove()
@@ -243,6 +257,7 @@ export function createUi(cb: UiCallbacks): Ui {
             entry.style.display = 'flex'
             levels.style.display = 'none'
             hud.style.display = 'none'
+            hudRestart.style.display = 'none'
             seedBadge.style.display = 'none'
             hideCredits()
             renderModal('none')
@@ -250,6 +265,7 @@ export function createUi(cb: UiCallbacks): Ui {
         showLevels(manifest: LevelManifest, done: Set<string>): void {
             entry.style.display = 'none'
             hud.style.display = 'none'
+            hudRestart.style.display = 'none'
             seedBadge.style.display = 'none'
             hideCredits()
             renderModal('none')
@@ -287,12 +303,13 @@ export function createUi(cb: UiCallbacks): Ui {
             entry.style.display = 'none'
             levels.style.display = 'none'
             hud.style.display = 'block'
+            hudRestart.style.display = 'block'
             hideCredits()
             if (seed === undefined && id === undefined) {
                 seedBadge.style.display = 'none'
             } else {
                 seedBadge.textContent =
-                    id === undefined ? (seed ?? '') : seed === undefined ? `№${id}` : `№${id} · ${seed}`
+                    id === undefined ? (seed ?? '') : seed === undefined ? id : `${id} · ${seed}`
                 seedBadge.style.display = 'block'
             }
             renderModal('none')
@@ -301,6 +318,7 @@ export function createUi(cb: UiCallbacks): Ui {
             if (kind === 'none') renderModal('none')
             else {
                 hud.style.display = 'block'
+                hudRestart.style.display = 'block'
                 renderModal(kind)
             }
         },
