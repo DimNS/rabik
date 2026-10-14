@@ -55,6 +55,8 @@ jobs:
         run: bun run check
 
       - name: Build
+        env:
+          APP_VERSION: ${{ inputs.tag || github.ref_name }}
         run: bun run build
 
       - name: Deploy to GitHub Pages (gh-pages branch)

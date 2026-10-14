@@ -128,7 +128,12 @@ export function createUi(cb: UiCallbacks): Ui {
     creditsImg.alt = 'credits'
     creditsImg.style.cssText = 'width:220px;max-width:60vw'
     creditsBtn.append(creditsImg)
-    entry.append(logo, play, creditsBtn)
+    const appVersion = document.createElement('div')
+    // ponytail: bun инлайнит APP_VERSION через --env, гард для dev без флага
+    const ver = typeof process !== 'undefined' ? (process.env.APP_VERSION ?? 'dev') : 'dev'
+    appVersion.textContent = ver
+    appVersion.style.cssText = 'font:12px/1 monospace;color:#64748b;margin-top:-12px'
+    entry.append(logo, play, creditsBtn, appVersion)
 
     const creditsModal = document.createElement('div')
     creditsModal.style.cssText =

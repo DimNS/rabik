@@ -2,7 +2,9 @@
 set -euo pipefail
 
 rm -rf dist
-bun build src/index.ts --target=browser --outdir=dist
+# ponytail: версия из тега, локально — describe/коммит, иначе dev
+export APP_VERSION="${APP_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+bun build src/index.ts --target=browser --outdir=dist --env="APP_VERSION*"
 
 cp -r public dist/public
 rm -rf dist/public/assets/raw
