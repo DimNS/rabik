@@ -218,10 +218,12 @@ describe('parseManifest', () => {
         expect(() => parseManifest({ levels: [{ id: 'a', seed: 7 }] })).toThrow(/seed/)
     })
 
-    test('difficulty необязателен, но обязан быть easy, normal или hard', () => {
-        expect(parseManifest({ levels: [{ id: 'a', difficulty: 'easy' }] })).toEqual({
-            levels: [{ id: 'a', difficulty: 'easy' }],
-        })
+    test('difficulty необязателен, но обязан быть easy, normal, hard или nightmare', () => {
+        for (const difficulty of ['easy', 'normal', 'hard', 'nightmare'] as const) {
+            expect(parseManifest({ levels: [{ id: 'a', difficulty }] })).toEqual({
+                levels: [{ id: 'a', difficulty }],
+            })
+        }
         expect(() => parseManifest({ levels: [{ id: 'a', difficulty: 'medium' }] })).toThrow(/difficulty/)
         expect(() => parseManifest({ levels: [{ id: 'a', difficulty: '' }] })).toThrow(/difficulty/)
     })

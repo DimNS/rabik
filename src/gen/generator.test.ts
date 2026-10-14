@@ -1,9 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { parseLevel } from '../data/levels-loader.ts'
-import { DIFFICULTY_PRESETS, generateLevel, MAX_HEIGHT, MAX_WIDTH, pickWallFrame } from './generator.ts'
+import {
+    DIFFICULTY_PRESETS,
+    generateLevel,
+    isSimpleCorridor,
+    MAX_HEIGHT,
+    MAX_WIDTH,
+    pickWallFrame,
+} from './generator.ts'
 import { solveLevel } from './solver.ts'
 
-function wallRatio(difficulty: 'easy' | 'normal' | 'hard', seed: string): number {
+function wallRatio(difficulty: 'easy' | 'normal' | 'hard' | 'nightmare', seed: string): number {
     const level = generateLevel({ difficulty, seed })
     const walls = level.grid.flat().filter((c) => c === 'wall').length
     return walls / (level.width * level.height)
@@ -11,7 +18,7 @@ function wallRatio(difficulty: 'easy' | 'normal' | 'hard', seed: string): number
 
 describe('generator', () => {
     test('все сложности укладываются в лимит и не больше базы +1 (кроп режет пустые поля)', () => {
-        for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+        for (const difficulty of ['easy', 'normal', 'hard', 'nightmare'] as const) {
             const base = DIFFICULTY_PRESETS[difficulty]
             const started = Date.now()
             const level = generateLevel({ difficulty, seed: `size-${difficulty}` })
@@ -22,6 +29,23 @@ describe('generator', () => {
             expect(level.height).toBeLessThanOrEqual(base.h + 1)
             expect(solveLevel(level)).not.toBeNull()
         }
+    })
+
+    test('nightmare всегда 8×15, решаем и без длинных прямых', () => {
+        for (let i = 0; i < 5; i++) {
+            const started = Date.now()
+            const level = generateLevel({ difficulty: 'nightmare', seed: `nightmare-${i}` })
+            expect(Date.now() - started).toBeLessThan(2000)
+            expect(level.width).toBe(MAX_WIDTH)
+            expect(level.height).toBe(MAX_HEIGHT)
+            const route = solveLevel(level)
+            if (!route) throw new Error('nightmare должен решаться солвером')
+            expect(isSimpleCorridor(route)).toBe(false)
+        }
+        const a = generateLevel({ difficulty: 'nightmare', seed: 'night-fixed' })
+        const b = generateLevel({ difficulty: 'nightmare', seed: 'night-fixed' })
+        expect(b.tiles).toEqual(a.tiles)
+        expect(b.start).toEqual(a.start)
     })
 
     test('кроп: пустые wall-ряды только по самому краю в 1 клетку', () => {
@@ -49,7 +73,7 @@ describe('generator', () => {
     })
 
     test('вывод проходит parseLevel без ошибок и без tileSeed', () => {
-        for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+        for (const difficulty of ['easy', 'normal', 'hard', 'nightmare'] as const) {
             const level = generateLevel({ difficulty, seed: `parse-${difficulty}` })
             const raw = {
                 id: level.id,

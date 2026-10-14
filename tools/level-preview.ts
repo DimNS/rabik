@@ -184,8 +184,8 @@ load001Btn.onclick = () => {
 genBtn.onclick = () => {
     try {
         const difficulty = diffSel.value as Difficulty
-        if (difficulty !== 'easy' && difficulty !== 'normal' && difficulty !== 'hard') {
-            throw new Error('--difficulty должен быть easy, normal или hard')
+        if (difficulty !== 'easy' && difficulty !== 'normal' && difficulty !== 'hard' && difficulty !== 'nightmare') {
+            throw new Error('--difficulty должен быть easy, normal, hard или nightmare')
         }
         const seed = seedInput.value || undefined
         const lvl = generateLevel({ difficulty, ...(seed === undefined ? {} : { seed }) })

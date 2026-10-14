@@ -16,8 +16,8 @@ function argValue(name: string): string | undefined {
 }
 
 const difficulty = (argValue('--difficulty') ?? 'normal') as Difficulty
-if (difficulty !== 'easy' && difficulty !== 'normal' && difficulty !== 'hard') {
-    fail('--difficulty должен быть easy, normal или hard')
+if (difficulty !== 'easy' && difficulty !== 'normal' && difficulty !== 'hard' && difficulty !== 'nightmare') {
+    fail('--difficulty должен быть easy, normal, hard или nightmare')
 }
 const seed = argValue('--seed')
 const id = argValue('--id')

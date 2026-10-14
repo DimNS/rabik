@@ -2,7 +2,7 @@ import type { LevelData, Vec2 } from '../core/level-types.ts'
 import { createRng, type Rng, randomSeed } from './rng.ts'
 import { solveLevel } from './solver.ts'
 
-export type Difficulty = 'easy' | 'normal' | 'hard'
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'nightmare'
 
 export interface GenerateOptions {
     difficulty: Difficulty
@@ -15,6 +15,7 @@ export const DIFFICULTY_PRESETS: Record<Difficulty, { w: number; h: number; cove
     easy: { w: 7, h: 12, cover: 0.35 },
     normal: { w: 8, h: 13, cover: 0.5 },
     hard: { w: 8, h: 15, cover: 0.6 },
+    nightmare: { w: 8, h: 15, cover: 0.6 },
 }
 
 export const MAX_WIDTH = 8
@@ -180,6 +181,36 @@ function cropWalls(grid: string[][], start: Vec2): { grid: string[][]; start: Ve
     }
 }
 
+// Метрики запутанности маршрута решения: макс. прямой отрезок (в клетках)
+// и число поворотов. Простой коридор = длинная прямая или почти без поворотов.
+export function isSimpleCorridor(route: Vec2[]): boolean {
+    const [a, b] = route
+    if (!a || !b) return true
+    let maxStraight = 2
+    let cur = 2
+    let turns = 0
+    let pdx = b.x - a.x
+    let pdy = b.y - a.y
+    for (let i = 2; i < route.length; i++) {
+        const cur2 = route[i]
+        const prev = route[i - 1]
+        if (!cur2 || !prev) continue
+        const dx = cur2.x - prev.x
+        const dy = cur2.y - prev.y
+        if (dx === pdx && dy === pdy) {
+            cur++
+        } else {
+            turns++
+            if (cur > maxStraight) maxStraight = cur
+            cur = 2
+            pdx = dx
+            pdy = dy
+        }
+    }
+    if (cur > maxStraight) maxStraight = cur
+    return maxStraight > 5 || turns < 8
+}
+
 export function generateLevel(options: GenerateOptions): LevelData {
     const { difficulty, seed } = options
     const preset = DIFFICULTY_PRESETS[difficulty]
@@ -187,11 +218,13 @@ export function generateLevel(options: GenerateOptions): LevelData {
     const effectiveSeed = seed ?? randomSeed()
     const rng = createRng(effectiveSeed)
     const id = options.id ?? `gen-${difficulty}-${effectiveSeed}`
+    const isNightmare = difficulty === 'nightmare'
+    const maxAttempts = isNightmare ? 30 : 10
 
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const jitter = () => Math.floor(rng() * 3) - 1
-        let width = Math.min(MAX_WIDTH, Math.max(5, preset.w + jitter()))
-        let height = Math.min(MAX_HEIGHT, Math.max(5, preset.h + jitter()))
+        let width = isNightmare ? MAX_WIDTH : Math.min(MAX_WIDTH, Math.max(5, preset.w + jitter()))
+        let height = isNightmare ? MAX_HEIGHT : Math.min(MAX_HEIGHT, Math.max(5, preset.h + jitter()))
         let start: Vec2 = { x: Math.floor(rng() * width), y: Math.floor(rng() * height) }
         const target = Math.min(width * height - 1, Math.max(4, Math.round(width * height * preset.cover)))
 
@@ -207,11 +240,15 @@ export function generateLevel(options: GenerateOptions): LevelData {
         if (sRow) sRow[start.x] = 'road'
 
         // Выкидываем пустые wall-поля, оставляя рамку в 1 клетку.
-        const cropped = cropWalls(grid, start)
-        const cgrid = cropped.grid
-        start = cropped.start
-        width = cropped.width
-        height = cropped.height
+        // Nightmare пропускает кроп: поле всегда ровно MAX.
+        let cgrid = grid
+        if (!isNightmare) {
+            const cropped = cropWalls(grid, start)
+            cgrid = cropped.grid
+            start = cropped.start
+            width = cropped.width
+            height = cropped.height
+        }
 
         // Пары s301/s302 целыми горизонтальными блоками на soil.
         const pairRight = new Set<string>()
@@ -269,7 +306,11 @@ export function generateLevel(options: GenerateOptions): LevelData {
             seed: effectiveSeed,
         }
         // Гарантия проходимости: кандидат без решения отбрасывается.
-        if (solveLevel(level)) return level
+        const route = solveLevel(level)
+        if (!route) continue
+        // Nightmare: простые коридоры отбрасываются.
+        if (isNightmare && isSimpleCorridor(route)) continue
+        return level
     }
-    throw new Error(`не удалось сгенерировать уровень "${difficulty}" за 10 попыток`)
+    throw new Error(`не удалось сгенерировать уровень "${difficulty}" за ${maxAttempts} попыток`)
 }

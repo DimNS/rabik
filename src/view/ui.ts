@@ -57,6 +57,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
     easy: '#22c55e',
     normal: '#3b82f6',
     hard: '#ef4444',
+    nightmare: '#a855f7',
 }
 
 export function nextLevelId(levels: { id: string }[], currentId: string): string | null {

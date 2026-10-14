@@ -43,7 +43,7 @@ export interface LevelData {
 export interface LevelManifestItem {
     id: string
     seed?: string
-    difficulty?: 'easy' | 'normal' | 'hard'
+    difficulty?: 'easy' | 'normal' | 'hard' | 'nightmare'
 }
 
 export interface LevelManifest {
