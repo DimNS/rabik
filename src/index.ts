@@ -110,6 +110,7 @@ async function bootstrap(): Promise<void> {
         screen = 'game'
         modal = 'none'
         queue.length = 0
+        game.resize()
         layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
         renderer.renderAll(state)
         ui.showGame(entry.seed, entry.id)
@@ -148,13 +149,17 @@ async function bootstrap(): Promise<void> {
         },
     })
 
-    window.addEventListener('resize', () => {
+    function relayout(): void {
         game.resize()
         if (state) {
             layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr())
             renderer.renderAll(state)
         }
-    })
+    }
+
+    window.addEventListener('resize', relayout)
+    // На мобильных показ/скрытие тулбара меняет высоту 100dvh без window.resize.
+    window.visualViewport?.addEventListener('resize', relayout)
 
     ui.showEntry()
 }
