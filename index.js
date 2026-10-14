@@ -727,7 +727,11 @@ function createUi(cb) {
   creditsImg.alt = "credits";
   creditsImg.style.cssText = "width:220px;max-width:60vw";
   creditsBtn.append(creditsImg);
-  entry.append(logo, play, creditsBtn);
+  const appVersion = document.createElement("div");
+  const ver = typeof process !== "undefined" ? "v1.4.1" : "dev";
+  appVersion.textContent = ver;
+  appVersion.style.cssText = "font:12px/1 monospace;color:#64748b;margin-top:-12px";
+  entry.append(logo, play, creditsBtn, appVersion);
   const creditsModal = document.createElement("div");
   creditsModal.style.cssText = "position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:auto";
   const creditsBackdrop = document.createElement("div");
@@ -999,6 +1003,7 @@ async function bootstrap() {
     screen = "game";
     modal = "none";
     queue.length = 0;
+    game.resize();
     layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr());
     renderer.renderAll(state);
     ui.showGame(entry.seed, entry.id);
@@ -1037,13 +1042,15 @@ async function bootstrap() {
       ui.showModal("none");
     }
   });
-  window.addEventListener("resize", () => {
+  function relayout() {
     game.resize();
     if (state) {
       layout = computeLayout(canvas.clientWidth, canvas.clientHeight, state.width, state.height, readDpr());
       renderer.renderAll(state);
     }
-  });
+  }
+  window.addEventListener("resize", relayout);
+  window.visualViewport?.addEventListener("resize", relayout);
   ui.showEntry();
 }
 function registerServiceWorker() {
