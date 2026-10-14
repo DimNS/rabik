@@ -201,8 +201,8 @@ function parseManifest(data) {
     if (seed !== undefined && (typeof seed !== "string" || seed === "")) {
       fail(`${place} (${id}): seed должен быть непустой строкой`);
     }
-    if (difficulty !== undefined && difficulty !== "easy" && difficulty !== "normal" && difficulty !== "hard") {
-      fail(`${place} (${id}): difficulty должен быть easy, normal или hard`);
+    if (difficulty !== undefined && difficulty !== "easy" && difficulty !== "normal" && difficulty !== "hard" && difficulty !== "nightmare") {
+      fail(`${place} (${id}): difficulty должен быть easy, normal, hard или nightmare`);
     }
     entries.push({
       id,
@@ -668,7 +668,8 @@ var MODAL_ZONES = {
 var DIFFICULTY_COLORS = {
   easy: "#22c55e",
   normal: "#3b82f6",
-  hard: "#ef4444"
+  hard: "#ef4444",
+  nightmare: "#a855f7"
 };
 function nextLevelId(levels, currentId) {
   const i = levels.findIndex((l) => l.id === currentId);
