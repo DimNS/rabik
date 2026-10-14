@@ -129,8 +129,8 @@ export function createUi(cb: UiCallbacks): Ui {
     creditsImg.style.cssText = 'width:220px;max-width:60vw'
     creditsBtn.append(creditsImg)
     const appVersion = document.createElement('div')
-    // ponytail: bun инлайнит APP_VERSION через --env, гард для dev без флага
-    const ver = typeof process !== 'undefined' ? (process.env.APP_VERSION ?? 'dev') : 'dev'
+    // ponytail: bun инлайнит APP_VERSION через --env, без typeof process — он ложен в браузере
+    const ver = process.env.APP_VERSION ?? 'dev'
     appVersion.textContent = ver
     appVersion.style.cssText = 'font:12px/1 monospace;color:#64748b;margin-top:-12px'
     entry.append(logo, play, creditsBtn, appVersion)
