@@ -1,9 +1,13 @@
+import { createHash } from 'node:crypto'
 import { type Dirent, readdirSync, readFileSync } from 'node:fs'
 
 const ROOT = new URL('../', import.meta.url).pathname
 const SW = `${ROOT}sw.js`
 const START = '// @generated:precache:start'
 const END = '// @generated:precache:end'
+const CACHE = /const CACHE = 'rabik-[^']*'/
+// index.html/index.js в корне отличаются от того, что реально отдаётся из dist.
+const dist = (url: string): boolean => url === './index.html' || url === './index.js'
 
 function fail(message: string): never {
     console.error(`gen-sw: ${message}`)
@@ -44,7 +48,19 @@ try {
     fail(`не удалось прочитать ${SW}`)
 }
 if (!sw.includes(START) || !sw.includes(END)) fail(`в ${SW} нет маркеров ${START} / ${END}`)
+if (!CACHE.test(sw)) fail(`в ${SW} нет строки const CACHE = 'rabik-...'`)
+
+// Версия кэша — хеш содержимого precache: меняется только когда меняются ассеты.
+const hash = createHash('sha256')
+for (const url of urls) {
+    const dir = dist(url) ? `${ROOT}dist/` : ROOT
+    hash.update(url).update(readFileSync(`${dir}${url.slice(2)}`))
+}
+const version = hash.digest('hex').slice(0, 8)
+
 const block = [START, ...urls.map((url) => `    '${url}',`), `    ${END}`].join('\n')
-const next = sw.replace(new RegExp(`${START}[\\s\\S]*?${END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), () => block)
+const next = sw
+    .replace(new RegExp(`${START}[\\s\\S]*?${END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), () => block)
+    .replace(CACHE, `const CACHE = 'rabik-${version}'`)
 await Bun.write(SW, next)
-console.log(`sw.js: precache ${urls.length} файлов`)
+console.log(`sw.js: precache ${urls.length} файлов, кэш rabik-${version}`)
