@@ -1,6 +1,6 @@
 // Service Worker игры Rabik: офлайн-запуск после первого онлайн-визита.
-// Версия кэша — одна строка: bump при каждой сборке с изменившимися ассетами.
-const CACHE = 'rabik-v7'
+// Версия кэша проставляется при сборке (scripts/gen-sw.ts) — руками не менять.
+const CACHE = 'rabik-923674f0'
 
 const PRECACHE = [
     // @generated:precache:start
@@ -244,7 +244,8 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches
             .keys()
-            .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+            // Чужие кэши на этом origin (например, соседний GitHub Pages проект) не трогаем.
+            .then((keys) => Promise.all(keys.filter((key) => key.startsWith('rabik-') && key !== CACHE).map((key) => caches.delete(key))))
             .then(() => self.clients.claim()),
     )
 })
@@ -258,16 +259,18 @@ self.addEventListener('fetch', (event) => {
         return
     }
     event.respondWith(
-        caches.match(request).then(
-            (cached) =>
-                cached ??
-                fetch(request).then((response) => {
-                    if (response.ok) {
-                        const copy = response.clone()
-                        caches.open(CACHE).then((cache) => cache.put(request, copy))
-                    }
-                    return response
-                }),
+        caches.open(CACHE).then((cache) =>
+            cache.match(request).then(
+                (cached) =>
+                    cached ??
+                    fetch(request).then((response) => {
+                        // 206 (Range) Cache API не принимает — кэшируем только полный ответ.
+                        if (response.status === 200) {
+                            event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
+                        }
+                        return response
+                    }),
+            ),
         ),
     )
 })

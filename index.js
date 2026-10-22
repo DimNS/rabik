@@ -728,7 +728,7 @@ function createUi(cb) {
   creditsImg.style.cssText = "width:220px;max-width:60vw";
   creditsBtn.append(creditsImg);
   const appVersion = document.createElement("div");
-  const ver = "v1.4.2";
+  const ver = "v1.4.3";
   appVersion.textContent = ver;
   appVersion.style.cssText = "font:12px/1 monospace;color:#64748b;margin-top:-12px";
   entry.append(logo, play, creditsBtn, appVersion);
