@@ -728,7 +728,7 @@ function createUi(cb) {
   creditsImg.style.cssText = "width:220px;max-width:60vw";
   creditsBtn.append(creditsImg);
   const appVersion = document.createElement("div");
-  const ver = "v1.4.3";
+  const ver = "v1.4.4";
   appVersion.textContent = ver;
   appVersion.style.cssText = "font:12px/1 monospace;color:#64748b;margin-top:-12px";
   entry.append(logo, play, creditsBtn, appVersion);
@@ -1056,15 +1056,10 @@ async function bootstrap() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator))
     return;
-  const register = () => {
-    navigator.serviceWorker.register("./sw.js").catch((err) => {
-      console.warn(`sw: регистрация не удалась (${err instanceof Error ? err.message : String(err)})`);
-    });
-  };
-  if (document.readyState === "complete")
-    register();
-  else
-    window.addEventListener("load", register, { once: true });
+  navigator.serviceWorker.register("./sw.js").catch((err) => {
+    console.warn(`sw: регистрация не удалась (${err instanceof Error ? err.message : String(err)})`);
+  });
+  navigator.serviceWorker.ready.then((registration) => registration.active?.postMessage("warm"));
 }
 registerServiceWorker();
 bootstrap().catch(showError);
