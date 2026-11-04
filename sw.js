@@ -1,6 +1,6 @@
 // Service Worker игры Rabik: офлайн-запуск после первого онлайн-визита.
 // Версия кэша проставляется при сборке (scripts/gen-sw.ts) — руками не менять.
-const CACHE = 'rabik-5aff28b8'
+const CACHE = 'rabik-0ecaa683'
 
 const PRECACHE = [
     // @generated:precache:start
@@ -231,11 +231,17 @@ const PRECACHE = [
     // @generated:precache:end
 ]
 
+// Оболочка — всё, без чего игра не дойдёт до стартового экрана. Уровни качаем
+// отдельно: один сбой при addAll на 200+ файлов оставлял приложение без кэша.
+const LEVELS = './public/data/levels/'
+const SHELL = PRECACHE.filter((url) => !url.startsWith(LEVELS) || url === `${LEVELS}index.json`)
+const LEVEL_FILES = PRECACHE.filter((url) => url.startsWith(LEVELS) && url !== `${LEVELS}index.json`)
+
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches
             .open(CACHE)
-            .then((cache) => cache.addAll(PRECACHE))
+            .then((cache) => cache.addAll(SHELL))
             .then(() => self.skipWaiting()),
     )
 })
@@ -250,27 +256,44 @@ self.addEventListener('activate', (event) => {
     )
 })
 
+// Уровни докачиваем после активации по сообщению 'warm': установка не ждёт
+// 200 файлов и не срывается, если игру закрыли на середине.
+async function warmLevels() {
+    const cache = await caches.open(CACHE)
+    const missing = []
+    for (const url of LEVEL_FILES) {
+        if (!(await cache.match(url))) missing.push(url)
+    }
+    // По 8 параллельных запросов, чтобы не забивать мобильную сеть.
+    for (let i = 0; i < missing.length; i += 8) {
+        await Promise.allSettled(missing.slice(i, i + 8).map((url) => cache.add(url)))
+    }
+}
+
+self.addEventListener('message', (event) => {
+    if (event.data !== 'warm' || !event.waitUntil) return
+    event.waitUntil(warmLevels())
+})
+
 self.addEventListener('fetch', (event) => {
     const { request } = event
     if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return
-    // Навигации без сети — на оболочку, а не в пустую страницу.
-    if (request.mode === 'navigate') {
-        event.respondWith(fetch(request).catch(() => caches.match('./index.html')))
-        return
-    }
     event.respondWith(
         caches.open(CACHE).then((cache) =>
-            cache.match(request).then(
-                (cached) =>
-                    cached ??
-                    fetch(request).then((response) => {
-                        // 206 (Range) Cache API не принимает — кэшируем только полный ответ.
-                        if (response.status === 200) {
-                            event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
-                        }
-                        return response
-                    }),
-            ),
+            cache.match(request).then((cached) => {
+                if (cached) return cached
+                // Навигация без сети — сразу на оболочку, не ждём таймаут сети.
+                if (request.mode === 'navigate') {
+                    return cache.match('./index.html').then((shell) => shell ?? fetch(request))
+                }
+                return fetch(request).then((response) => {
+                    // 206 (Range) Cache API не принимает — кэшируем только полный ответ.
+                    if (response.status === 200) {
+                        event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
+                    }
+                    return response
+                })
+            }),
         ),
     )
 })

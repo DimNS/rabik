@@ -166,13 +166,11 @@ async function bootstrap(): Promise<void> {
 
 function registerServiceWorker(): void {
     if (!('serviceWorker' in navigator)) return
-    const register = (): void => {
-        navigator.serviceWorker.register('./sw.js').catch((err: unknown) => {
-            console.warn(`sw: регистрация не удалась (${err instanceof Error ? err.message : String(err)})`)
-        })
-    }
-    if (document.readyState === 'complete') register()
-    else window.addEventListener('load', register, { once: true })
+    navigator.serviceWorker.register('./sw.js').catch((err: unknown) => {
+        console.warn(`sw: регистрация не удалась (${err instanceof Error ? err.message : String(err)})`)
+    })
+    // Оболочку SW кэширует при установке, уровни — по этому сигналу после активации.
+    navigator.serviceWorker.ready.then((registration) => registration.active?.postMessage('warm'))
 }
 
 registerServiceWorker()
