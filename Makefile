@@ -29,4 +29,4 @@ atlas:
 	@bun scripts/gen-atlas.ts
 
 release:
-	@./scripts/release.sh $(if $(DRY_RUN),--dry-run)
+	@$(HOME)/.local/bin/release.sh $(if $(DRY_RUN),--dry-run)
